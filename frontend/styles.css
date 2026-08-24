@@ -45,16 +45,6 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
-.brand-mark {
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  background: var(--terracotta);
-  color: #fff7ee;
-  font-family: var(--serif);
-  font-size: 20px; font-weight: 700;
-  border-radius: 9px;
-  box-shadow: var(--shadow-sm);
-}
 .brand-name { font-family: var(--serif); font-size: 21px; font-weight: 600; letter-spacing: 0.2px; }
 .topnav { display: flex; align-items: center; gap: 6px; }
 .navlink {
