@@ -15,6 +15,8 @@ chatbots collapse into one:
 
 ## What it does
 
+![Athens home](docs/home.png)
+
 - **Question-first.** You don't pick a 10-module syllabus. You ask
   "How does the Fourier transform actually work?" and Athens builds one
   self-contained lesson, then grows the graph outward: prerequisites on one
@@ -23,6 +25,9 @@ chatbots collapse into one:
   definition, one worked example, the most common misconception, a diagram, a
   3-question quiz, and 3 flashcards. The model fills the slots; the skeleton is
   deterministic, so output is testable.
+
+![A lesson, one idea at a time](docs/lesson.png)
+
 - **Source-grounded.** Paste an article, notes, or a textbook excerpt and the
   lesson is built from *that* material instead of the model's priors.
 - **Adaptive review, zero knobs.** Flashcards use SM-2 spaced repetition with
@@ -38,6 +43,8 @@ chatbots collapse into one:
   forever.
 - **Your data is yours.** One SQLite file. Export a full JSON backup or a
   tab-separated deck Anki can import directly.
+
+![The map grows as you learn](docs/map.png)
 
 ## Quick start
 
