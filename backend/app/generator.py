@@ -6,10 +6,116 @@ nodes are persisted. Failures land on `failed` with the error message.
 """
 import json
 import logging
+import re
 
 from . import db, llm, prompts
 
 log = logging.getLogger("athens.generator")
+
+
+def _clean_diagram(code: str) -> str:
+    """Normalize LLM-emitted Mermaid so it actually renders as a flowchart.
+
+    Models drift into sequence-diagram arrows (->>, -->>, -.->>) and wrap the
+    block in fences. Strip the fences and map invalid arrows to valid flowchart
+    syntax, keeping everything else untouched.
+    """
+    if not code:
+        return ""
+    code = code.strip()
+    # strip ```mermaid / ``` fences
+    code = re.sub(r"^```(?:mermaid)?\s*", "", code, flags=re.IGNORECASE)
+    code = re.sub(r"\s*```$", "", code)
+    code = code.strip()
+
+    # sequence-diagram arrows -> flowchart arrows
+    code = code.replace("-.->>", "-.->")
+    code = code.replace("-->>", "-->")
+    code = code.replace("->>", "-->")
+    code = code.replace("<<->>", "---")
+
+    # single-dash arrows -> double (but not inside an existing multi-dash arrow,
+    # and not the valid dotted -.-> form)
+    code = re.sub(r"(?<![-.|>])->(?!>)", "-->", code)
+    # stray trailing dash before a label or end: "-->-|", "-->-"  ->  "-->"
+    code = re.sub(r"-->-+(?=[|\s])", "-->", code)
+    code = re.sub(r"==>-+(?=[|\s])", "==>", code)
+
+    # models sometimes write -->|label|> instead of -->|label|
+    code = code.replace("|> ", "| ").replace("|>\n", "|\n").replace("|>", "|")
+    # join lines that were split wrongly:
+    #   - previous line ends with "|"  (arrow split after its label)
+    #   - this line starts with an arrow (arrow split onto its own line)
+    lines = code.split("\n")
+    merged = []
+    for line in lines:
+        stripped = line.strip()
+        starts_arrow = bool(re.match(r"^(?:-->|==>|-\.->|--o|--x)", stripped))
+        if merged and (merged[-1].rstrip().endswith("|") or starts_arrow):
+            merged[-1] = merged[-1].rstrip() + " " + stripped
+        else:
+            merged.append(line)
+    code = "\n".join(merged)
+    # quote bare node labels that contain spaces (Mermaid rejects them unquoted).
+    # skip the first line (the "flowchart TD" directive).
+    lines = code.split("\n")
+    out_lines = [lines[0]] if lines else []
+    for line in lines[1:]:
+        out_lines.append(_quote_bare_labels(line))
+    code = "\n".join(out_lines)
+    return code
+
+
+def _quote_bare_labels(line: str) -> str:
+    """Convert bare multi-word node names to Mermaid `id["label"]` form.
+
+    Mermaid rejects both bare names with spaces and bare double-quoted node ids;
+    the only reliable form is id["label"]. We strip spaces from the id and keep
+    the original text as the label, so repeated references resolve to the same
+    node id.
+    """
+    out = []
+    i, n = 0, len(line)
+    while i < n:
+        c = line[i]
+        if c in "[]()":
+            close = "]" if c == "[" else ")"
+            j = line.find(close, i + 1)
+            if j == -1:
+                out.append(line[i:]); break
+            out.append(line[i:j + 1]); i = j + 1; continue
+        if c == '"':
+            j = line.find('"', i + 1)
+            if j == -1:
+                out.append(line[i:]); break
+            out.append(line[i:j + 1]); i = j + 1; continue
+        if c == "|":
+            j = line.find("|", i + 1)
+            if j == -1:
+                out.append(line[i:]); break
+            out.append(line[i:j + 1]); i = j + 1; continue
+        if c.isalnum():
+            j = i
+            while j < n and (line[j].isalnum() or line[j] == " "):
+                j += 1
+            tok = line[i:j]
+            stripped = tok.strip()
+            # if a bracket shape follows immediately, it already supplies the
+            # label; just strip spaces from the id (e.g. "Actual Value[(...)]")
+            k = j
+            while k < n and line[k] == " ":
+                k += 1
+            if " " in stripped and k < n and line[k] == "[":
+                ident = re.sub(r"[^A-Za-z0-9_]", "", stripped)
+                out.append(ident)
+            elif " " in stripped:
+                ident = re.sub(r"[^A-Za-z0-9_]", "", stripped)
+                out.append(f'{ident}["{stripped}"]')
+            else:
+                out.append(tok)
+            i = j; continue
+        out.append(c); i += 1
+    return "".join(out)
 
 
 def _persist_lesson(node_id: str, lesson: dict) -> None:
@@ -107,6 +213,7 @@ def generate(node_id: str) -> None:
         for key in ("definition", "worked_example", "misconception", "diagram"):
             if not lesson.get(key):
                 lesson[key] = f"({key.replace('_', ' ')} not generated)"
+        lesson["diagram"] = _clean_diagram(lesson.get("diagram", ""))
         lesson["quiz"] = lesson.get("quiz") or []
         lesson["flashcards"] = lesson.get("flashcards") or []
         lesson["title"] = lesson.get("title") or row["title"]
@@ -114,8 +221,9 @@ def generate(node_id: str) -> None:
 
         _persist_lesson(node_id, lesson)
         _spawn_related(node_id, lesson)
-        conn.execute("UPDATE nodes SET status = 'ready', summary = ? WHERE id = ?",
-                     (lesson["summary"], node_id))
+        # surface the model's own title (cleaner than the raw question)
+        conn.execute("UPDATE nodes SET status = 'ready', summary = ?, title = ? WHERE id = ?",
+                     (lesson["summary"], lesson["title"], node_id))
         conn.commit()
         log.info("node %s ready", node_id)
     except Exception as exc:  # noqa: BLE001 - surface any failure to the node

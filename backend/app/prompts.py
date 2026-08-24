@@ -22,7 +22,7 @@ USER_TEMPLATE = (
     '  "definition": "2-4 sentences explaining the idea in plain, concrete language",\n'
     '  "worked_example": "one concrete, step-by-step worked example, 80-160 words",\n'
     '  "misconception": "the most common mistake people make about this, and the correction",\n'
-    '  "diagram": "a Mermaid flowchart (flowchart TD) with short plain-text labels; no special characters except spaces, commas and question marks",\n'
+    '  "diagram": "a Mermaid flowchart (start with exactly: flowchart TD). Use ONLY these arrow forms: -->, -->|label|, -.->, ==> . Write every node as id[\"label\"] with a short id that has no spaces (e.g. A[\"Input data\"]), and keep each node on one line. Short labels; no special characters except spaces, commas and question marks",\n'
     '  "quiz": [ {"question": "...", "options": ["a","b","c","d"], "answer": 0, "explanation": "why the answer is right and the others wrong"} ]  (exactly 3 items, 4 options each),\n'
     '  "flashcards": [ {"front": "...", "back": "..."} ]  (exactly 3 items),\n'
     '  "prerequisites": ["1-3 short titles of things to understand first"],\n'

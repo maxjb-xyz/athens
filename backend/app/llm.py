@@ -202,10 +202,41 @@ class OpenAIProvider:
 
 
 def get_provider():
-    if config.LLM_PROVIDER == "openai":
-        return OpenAIProvider(config.LLM_BASE_URL, config.LLM_API_KEY, config.LLM_MODEL)
+    from . import db as dbmod
+
+    provider = dbmod.get_setting("llm_provider", config.LLM_PROVIDER).strip().lower()
+    if provider == "openai":
+        base_url = dbmod.get_setting("llm_base_url", config.LLM_BASE_URL)
+        api_key = dbmod.get_setting("llm_api_key", config.LLM_API_KEY)
+        model = dbmod.get_setting("llm_model", config.LLM_MODEL)
+        return OpenAIProvider(base_url, api_key, model)
     # mock is the default
     return None
+
+
+def probe() -> dict:
+    """Cheap health check on the configured LLM. Returns ok=True if reachable."""
+    provider = get_provider()
+    if provider is None:
+        return {"ok": True, "provider": "mock", "latency_ms": 0}
+    import time as _t
+
+    start = _t.time()
+    try:
+        payload = {
+            "model": provider.model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+        }
+        headers = {"Content-Type": "application/json"}
+        if provider.api_key:
+            headers["Authorization"] = f"Bearer {provider.api_key}"
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(f"{provider.base_url}/chat/completions", json=payload, headers=headers)
+            resp.raise_for_status()
+        return {"ok": True, "provider": "openai", "model": provider.model, "latency_ms": int((_t.time() - start) * 1000)}
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "provider": "openai", "model": provider.model, "error": str(exc)[:200]}
 
 
 def complete_json(system: str, user: str, topic: str) -> dict:

@@ -25,9 +25,19 @@ chatbots collapse into one:
   deterministic, so output is testable.
 - **Source-grounded.** Paste an article, notes, or a textbook excerpt and the
   lesson is built from *that* material instead of the model's priors.
-- **Adaptive review, zero knobs.** Flashcards use SM-2 spaced repetition.
-  Quizzes re-test sooner when you're shaky and later when you're solid. You
+- **Adaptive review, zero knobs.** Flashcards use SM-2 spaced repetition with
+  proper new-card introduction (a daily budget, learning steps, graduation).
+  Quizzes re-test sooner when you're shaky and later when you're solid, and a
+  re-test surfaces the exact questions you've been getting wrong first. You
   only ever see Again / Hard / Good / Easy.
+- **A model of you that's actually consulted.** Per-idea mastery, per-question
+  correctness, a daily streak, and recommendations that respect the graph — you
+  won't be pointed at an extension before its prerequisite is mastered.
+- **You can fix the model's mistakes.** Edit any lesson field, delete a thread,
+  or regenerate a single lesson. A hallucinated fact doesn't poison a lesson
+  forever.
+- **Your data is yours.** One SQLite file. Export a full JSON backup or a
+  tab-separated deck Anki can import directly.
 
 ## Quick start
 
@@ -63,6 +73,9 @@ The `openai` provider covers OpenAI, DeepSeek, Anthropic-compatible proxies,
 Ollama's `/v1` endpoint, LM Studio, and vLLM — anything that speaks
 `/chat/completions`.
 
+Provider, model, base URL, and API key can also be changed at runtime from the
+Settings page (stored in the SQLite DB, overriding env defaults).
+
 ## Running without Docker (dev)
 
 ```bash
@@ -77,14 +90,16 @@ The frontend is served by the same process; no separate build step.
 ## Architecture
 
 - **FastAPI** backend (single process, serves API + static frontend)
-- **SQLite** (WAL mode) — no separate database to run
+- **SQLite** (WAL mode) with a versioned-migration framework — no separate
+  database to run, and schema changes are ordered and idempotent
 - **Mermaid** (vendored) for diagrams
-- **SM-2** spaced repetition, wrapped in four learner-facing buttons
+- **SM-2** spaced repetition with new/learning/review card states, wrapped in
+  four learner-facing buttons
 - Background threads run generation so the API stays responsive
 
 Data model: `nodes` (questions/concepts), `edges` (prerequisite/extension),
-`quiz_items`, `flashcards` (with SRS state), `mastery` (the learner model),
-`sources`.
+`quiz_items`, `quiz_stats` (per-question correctness), `flashcards` (SRS state),
+`mastery` (the learner model), `sources`, `daily_activity` (streaks), `settings`.
 
 ## License
 
