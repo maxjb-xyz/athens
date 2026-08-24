@@ -1,0 +1,34 @@
+services:
+  athens:
+    build: .
+    container_name: athens
+    ports:
+      - "8000:8000"
+    environment:
+      # "mock" needs no model at all — good for a first smoke test.
+      # "openai" hits any OpenAI-compatible endpoint (OpenAI, DeepSeek,
+      # Ollama's /v1, LM Studio, vLLM, ...).
+      ATHENS_LLM_PROVIDER: openai
+      ATHENS_LLM_BASE_URL: http://ollama:11434/v1
+      ATHENS_LLM_MODEL: llama3.1
+      # ATHENS_LLM_API_KEY: sk-...   # leave empty for local Ollama
+    volumes:
+      - athens_data:/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Local LLM so the whole thing is self-hosted. Pull a model once:
+  #   docker compose exec ollama ollama pull llama3.1
+  ollama:
+    image: ollama/ollama:latest
+    container_name: athens-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+volumes:
+  athens_data:
+  ollama_data:
