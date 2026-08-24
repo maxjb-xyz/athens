@@ -234,10 +234,14 @@ def delete_node(node_id: str):
     row = conn.execute("SELECT id FROM nodes WHERE id = ?", (node_id,)).fetchone()
     if row is None:
         raise HTTPException(404, "node not found")
+    # delete quiz_stats before quiz_items — the cleanup references quiz_items
+    conn.execute(
+        "DELETE FROM quiz_stats WHERE quiz_item_id IN (SELECT id FROM quiz_items WHERE node_id = ?)",
+        (node_id,),
+    )
+    conn.execute("DELETE FROM quiz_items WHERE node_id = ?", (node_id,))
     conn.execute("DELETE FROM edges WHERE from_id = ? OR to_id = ?", (node_id, node_id))
     conn.execute("DELETE FROM flashcards WHERE node_id = ?", (node_id,))
-    conn.execute("DELETE FROM quiz_items WHERE node_id = ?", (node_id,))
-    conn.execute("DELETE FROM quiz_stats WHERE quiz_item_id IN (SELECT id FROM quiz_items WHERE node_id = ?)", (node_id,))
     conn.execute("DELETE FROM mastery WHERE node_id = ?", (node_id,))
     conn.execute("DELETE FROM nodes WHERE id = ?", (node_id,))
     conn.commit()

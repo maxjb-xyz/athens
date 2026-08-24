@@ -120,7 +120,11 @@ def _quote_bare_labels(line: str) -> str:
 
 def _persist_lesson(node_id: str, lesson: dict) -> None:
     conn = db.db()
-    # replace quiz items
+    # replace quiz items (clean quiz_stats first — it references quiz_items)
+    conn.execute(
+        "DELETE FROM quiz_stats WHERE quiz_item_id IN (SELECT id FROM quiz_items WHERE node_id = ?)",
+        (node_id,),
+    )
     conn.execute("DELETE FROM quiz_items WHERE node_id = ?", (node_id,))
     for q in lesson.get("quiz", []):
         conn.execute(
@@ -167,6 +171,21 @@ def _new_related(conn, parent_id: str, title: str, relation: str) -> None:
     title = (title or "").strip()
     if not title:
         return
+    # idempotent: don't create a duplicate pending child on regenerate
+    if relation == "prerequisite":
+        dup = conn.execute(
+            "SELECT 1 FROM edges e JOIN nodes n ON n.id = e.from_id "
+            "WHERE e.to_id = ? AND e.relation = 'prerequisite' AND n.title = ? LIMIT 1",
+            (parent_id, title),
+        ).fetchone()
+    else:
+        dup = conn.execute(
+            "SELECT 1 FROM edges e JOIN nodes n ON n.id = e.to_id "
+            "WHERE e.from_id = ? AND e.relation = 'extension' AND n.title = ? LIMIT 1",
+            (parent_id, title),
+        ).fetchone()
+    if dup:
+        return
     child_id = db.new_id()
     conn.execute(
         "INSERT INTO nodes (id, title, status, kind, created_at) VALUES (?, ?, 'pending', ?, ?)",
@@ -204,9 +223,19 @@ def generate(node_id: str) -> None:
     conn.commit()
 
     try:
-        lesson = llm.complete_json(
-            prompts.SYSTEM_PROMPT, prompts.build_user_prompt(question, source_text), question
-        )
+        lesson = None
+        last_err = None
+        for attempt in range(2):  # one retry for flaky local models / bad JSON
+            try:
+                lesson = llm.complete_json(
+                    prompts.SYSTEM_PROMPT, prompts.build_user_prompt(question, source_text), question
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                log.warning("generation attempt %d failed for %s: %s", attempt + 1, node_id, exc)
+        if lesson is None:
+            raise last_err
         # minimal validation of the shape we rely on
         if not isinstance(lesson, dict):
             raise ValueError("LLM returned a non-object payload")
@@ -220,7 +249,14 @@ def generate(node_id: str) -> None:
         lesson["summary"] = lesson.get("summary") or ""
 
         _persist_lesson(node_id, lesson)
-        _spawn_related(node_id, lesson)
+        # Only grow the graph on first generation. On regenerate, the graph
+        # already exists and the model returns different related titles each
+        # time, so re-spawning would pile up duplicate/divergent children.
+        has_children = conn.execute(
+            "SELECT 1 FROM edges WHERE from_id = ? OR to_id = ? LIMIT 1", (node_id, node_id)
+        ).fetchone()
+        if not has_children:
+            _spawn_related(node_id, lesson)
         # surface the model's own title (cleaner than the raw question)
         conn.execute("UPDATE nodes SET status = 'ready', summary = ?, title = ? WHERE id = ?",
                      (lesson["summary"], lesson["title"], node_id))
