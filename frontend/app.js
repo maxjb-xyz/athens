@@ -826,4 +826,11 @@ async function refreshDueBadge() {
 
 // ---------------- boot ----------------
 mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+
+// wire the persistent header nav (delegated so it survives re-renders)
+document.querySelector(".topbar").addEventListener("click", (e) => {
+  const target = e.target.closest("[data-nav]");
+  if (target) navigate(target.dataset.nav);
+});
+
 render();
