@@ -436,9 +436,97 @@ html, body {
 .loading p { color: var(--ink-soft); font-size: 15px; margin: 0; }
 .failed-note { background: #f7e3e3; border-left: 4px solid #c95f5f; border-radius: 0 10px 10px 0; padding: 16px 20px; color: #6f2a2a; font-size: 15px; line-height: 1.55; }
 
+/* ---------- mobile tab bar ---------- */
+.tabbar {
+  display: none;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 30;
+  background: rgba(255, 253, 248, 0.96);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab {
+  flex: 1;
+  appearance: none; border: none; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; padding: 8px 4px 10px; cursor: pointer;
+  color: var(--ink-faint); font-family: var(--body);
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-ico { font-size: 20px; line-height: 1; }
+.tab-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; }
+.tab.active { color: var(--terracotta); }
+.tab .badge { font-size: 10px; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 3px; }
+
 @media (max-width: 640px) {
-  .view { padding: 24px 16px 80px; }
-  .lesson { padding: 26px 22px; }
-  .ask-hero { padding: 40px 0 12px; }
-  .topbar { padding: 12px 16px; }
+  /* layout */
+  .view { padding: 20px 16px 96px; }
+  .topbar { padding: 12px 16px; justify-content: center; }
+  .topnav { display: none; } /* replaced by the tab bar */
+  .tabbar { display: flex; }
+
+  /* larger touch targets everywhere */
+  .btn-primary, .btn-secondary { padding: 15px 24px; font-size: 16px; min-height: 48px; }
+  .navlink { display: none; }
+  .rate-btn { padding: 14px 18px; font-size: 15px; flex: 1; }
+  .rate-row { gap: 8px; }
+  .option { padding: 14px 14px; font-size: 15.5px; }
+  .rel-item { padding: 14px 16px; }
+  .recent-item { padding: 16px 16px; }
+  .crumb-link { font-size: 14px; padding: 6px 0; }
+
+  /* typography */
+  .ask-hero { padding: 36px 0 8px; }
+  .ask-title { font-size: 30px; }
+  .ask-sub { font-size: 16px; }
+  .ask-card { padding: 20px; margin-top: 28px; }
+  .ask-input { font-size: 17px; min-height: 60px; }
+  .ask-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+  .ask-actions .btn-primary { width: 100%; }
+  .ask-hint { text-align: center; }
+
+  /* lesson */
+  .lesson { padding: 22px 18px; border-radius: 12px; }
+  .lesson-crumb { flex-wrap: wrap; row-gap: 4px; margin-bottom: 16px; }
+  .stepper { gap: 6px; margin: 14px 0 20px; }
+  .step-pill { padding: 6px 11px; font-size: 12.5px; }
+  .step { max-width: 100%; }
+  .step-title { font-size: 24px; }
+  .lesson-nav { margin-top: 24px; }
+  .lesson-nav .btn-primary, .lesson-nav .btn-secondary { min-width: 0; }
+  .diagram-box { padding: 16px; overflow-x: auto; }
+  .callout { font-size: 15px; }
+
+  /* quiz */
+  .quiz-q .qq { font-size: 17px; }
+  .explanation { font-size: 14.5px; padding: 12px 14px; }
+
+  /* map */
+  .map-wrap { padding: 20px 16px; }
+  .map-head { flex-direction: column; gap: 4px; }
+  #map-svg { height: 440px; }
+  .map-list { display: flex; flex-direction: column; gap: 8px; }
+  .map-list-item {
+    appearance: none; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    width: 100%; text-align: left; cursor: pointer;
+    background: #fff; border: 1px solid var(--border); border-radius: 11px;
+    padding: 15px 16px; font-family: var(--body);
+  }
+  .map-list-item:active { background: var(--terracotta-soft); }
+  .mli-title { font-family: var(--serif); font-size: 16px; color: var(--ink); }
+
+  /* review */
+  .review-wrap { max-width: 100%; }
+  .review-card, .review-card .flipcard-inner, .review-card .flipcard-face { height: 240px; }
+  .review-card .flipcard-face { font-size: 17px; padding: 22px; }
+  .review-head h1 { font-size: 24px; }
+
+  /* progress / settings */
+  .progress-head h1 { font-size: 26px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-num { font-size: 28px; }
+  .settings-card { padding: 18px; }
+  .settings-row { flex-direction: column; align-items: flex-start; gap: 8px; }
 }

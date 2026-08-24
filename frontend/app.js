@@ -31,8 +31,12 @@ function navigate(path) {
 async function render() {
   const { seg, id } = parseHash();
   currentRoute = { seg, id };
+  const activeNav = seg === "node" ? "home" : seg;
   document.querySelectorAll(".navlink").forEach((b) => {
-    b.classList.toggle("active", b.dataset.nav === seg || (seg === "node" && b.dataset.nav === "home"));
+    b.classList.toggle("active", b.dataset.nav === activeNav);
+  });
+  document.querySelectorAll(".tab").forEach((b) => {
+    b.classList.toggle("active", b.dataset.nav === activeNav);
   });
   try {
     if (seg === "home") await renderHome();
@@ -543,6 +547,10 @@ function openEditor() {
 }
 
 // ---------------- map ----------------
+function isMobile() {
+  return window.matchMedia("(max-width: 640px)").matches;
+}
+
 async function renderMap() {
   const data = await api("/api/nodes");
   if (!data.nodes.length) {
@@ -560,7 +568,34 @@ async function renderMap() {
         <span><span class="legend-dot" style="background:#f3dccb"></span>Not started</span>
       </div>
     </div>`;
-  drawGraph(data.nodes, data.edges);
+  if (isMobile()) {
+    renderMapList(data.nodes);
+  } else {
+    drawGraph(data.nodes, data.edges);
+  }
+}
+
+function renderMapList(nodes) {
+  const svg = document.getElementById("map-svg");
+  svg.style.display = "none";
+  document.querySelector(".map-legend").style.display = "none";
+  const order = { root: 0, ready: 1, pending: 2, failed: 3 };
+  const sorted = [...nodes].sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
+  const list = document.createElement("div");
+  list.className = "map-list";
+  list.innerHTML = sorted.map((n) => {
+    const mastery = n.mastery ? Math.round(n.mastery * 100) : 0;
+    let pill;
+    if (n.status === "failed") pill = '<span class="status-pill pill-failed">failed</span>';
+    else if (n.status === "generating") pill = '<span class="status-pill pill-gen">building…</span>';
+    else if (n.status === "pending") pill = '<span class="status-pill pill-pending">to explore</span>';
+    else pill = `<span class="mastery-pill"><span class="mastery-bar"><span class="mastery-fill" style="width:${mastery}%"></span></span>${mastery}%</span>`;
+    return `<button class="map-list-item" data-id="${n.id}">
+      <span class="mli-title">${escapeHtml(n.title)}</span>${pill}
+    </button>`;
+  }).join("");
+  svg.insertAdjacentElement("afterend", list);
+  list.querySelectorAll(".map-list-item").forEach((b) => b.addEventListener("click", () => navigate("node/" + b.dataset.id)));
 }
 
 function drawGraph(nodes, edges) {
@@ -818,18 +853,20 @@ async function renderSettings() {
 async function refreshDueBadge() {
   try {
     const data = await api("/api/review");
-    const n = (data.cards || []).length;
-    const badge = document.getElementById("due-badge");
-    if (badge) { badge.hidden = n === 0; badge.textContent = n; }
+    const n = (data.cards || []).length + (data.quizzes || []).length;
+    for (const id of ["due-badge", "due-badge-m"]) {
+      const badge = document.getElementById(id);
+      if (badge) { badge.hidden = n === 0; badge.textContent = n; }
+    }
   } catch (e) { /* ignore */ }
 }
 
 // ---------------- boot ----------------
 mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
 
-// wire the persistent header nav (delegated so it survives re-renders)
-document.querySelector(".topbar").addEventListener("click", (e) => {
-  const target = e.target.closest("[data-nav]");
+// wire the persistent header + tab-bar nav (delegated so it survives re-renders)
+document.addEventListener("click", (e) => {
+  const target = e.target.closest(".topbar [data-nav], .tabbar [data-nav]");
   if (target) navigate(target.dataset.nav);
 });
 
