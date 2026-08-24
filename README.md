@@ -103,4 +103,4 @@ Data model: `nodes` (questions/concepts), `edges` (prerequisite/extension),
 
 ## License
 
-MIT
+GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE).
