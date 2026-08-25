@@ -225,7 +225,7 @@ def generate(node_id: str) -> None:
     try:
         lesson = None
         last_err = None
-        for attempt in range(2):  # one retry for flaky local models / bad JSON
+        for attempt in range(2):  # one retry for flaky local models that emit bad JSON
             try:
                 lesson = llm.complete_json(
                     prompts.SYSTEM_PROMPT, prompts.build_user_prompt(question, source_text), question
@@ -234,6 +234,10 @@ def generate(node_id: str) -> None:
             except Exception as exc:  # noqa: BLE001
                 last_err = exc
                 log.warning("generation attempt %d failed for %s: %s", attempt + 1, node_id, exc)
+                # don't retry on timeouts — the model is overloaded; let the user
+                # retry manually when the GPU is free
+                if isinstance(exc, (__import__("httpx").ReadTimeout, __import__("httpx").RemoteProtocolError)):
+                    raise
         if lesson is None:
             raise last_err
         # minimal validation of the shape we rely on

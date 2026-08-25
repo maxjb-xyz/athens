@@ -229,11 +229,14 @@ async function renderNode(id) {
 
 async function pollNode(id) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  for (let i = 0; i < 120; i++) {
-    await wait(2500);
+  let seenGenerating = false;
+  for (let i = 0; i < 160; i++) {
+    await wait(2000);
     const node = await api("/api/nodes/" + id);
     if (node.status === "ready" || node.status === "failed") { render(); return; }
+    seenGenerating = true;
   }
+  // safety valve — give up after ~5 minutes and let the user retry
   render();
 }
 
