@@ -179,27 +179,28 @@ html, body {
   display: flex; align-items: flex-start; gap: 14px;
   margin: 18px 0 26px;
 }
-.stepper-sections { flex: 1; display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
-.stepper-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.stepper-group-label {
-  font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
-  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
+.stepper-sec {
+  font-size: 13px; font-weight: 600; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
+  padding-top: 22px;
 }
-.stepper-group-segs { display: flex; align-items: center; gap: 4px; }
-.stepper-group-segs .seg {
-  appearance: none; cursor: pointer; border: 1px solid transparent;
-  width: 22px; height: 22px; border-radius: 5px; padding: 0;
-  display: grid; place-items: center;
-  font-size: 12px; line-height: 1; font-family: var(--body);
-  background: var(--paper-deep); color: var(--ink-faint);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+.stepper-segs { flex: 1; display: flex; align-items: flex-end; gap: 4px; min-width: 0; }
+.stepper-dash-group { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.stepper-label {
+  font-size: 10px; font-weight: 600; color: var(--ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
-.stepper-group-segs .seg:hover { border-color: var(--terracotta); color: var(--ink); }
-.stepper-group-segs .seg.done { background: var(--terracotta-soft); color: var(--terracotta-dark); }
-.stepper-group-segs .seg.cur { background: var(--terracotta); color: #fff; box-shadow: 0 0 0 3px rgba(184, 85, 43, 0.22); }
-.stepper-group-segs .seg.locked { cursor: default; opacity: 0.4; }
-.stepper-divider { width: 1px; background: var(--border); align-self: stretch; flex: none; }
+.stepper-dash-group .seg {
+  appearance: none; cursor: pointer; border: none;
+  width: 100%; min-width: 10px; height: 7px; border-radius: 3px; padding: 0;
+  background: var(--paper-deep);
+  transition: background 0.15s;
+}
+.stepper-dash-group .seg:hover { background: var(--terracotta); }
+.stepper-dash-group .seg.done { background: var(--terracotta-soft); }
+.stepper-dash-group .seg.cur { background: var(--terracotta); }
+.stepper-dash-group .seg.locked { cursor: default; opacity: 0.35; }
+.stepper-divider { width: 1px; background: var(--border); align-self: stretch; flex: none; margin-top: 15px; }
 .stepper-count { font-size: 13px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; padding-top: 20px; }
 
 /* key terms module */
@@ -537,9 +538,9 @@ html, body {
   .lesson { padding: 22px 18px; border-radius: 12px; }
   .lesson-crumb { flex-wrap: wrap; row-gap: 4px; margin-bottom: 16px; }
   .stepper { gap: 8px; margin: 14px 0 20px; }
-  .stepper-sections { overflow-x: auto; padding-bottom: 4px; }
-  .stepper-group { flex: none; }
-  .stepper-group-label { max-width: 90px; }
+  .stepper-sec { display: none; }
+  .stepper-segs { overflow-x: auto; padding-bottom: 4px; }
+  .stepper-dash-group { flex: none; }
   .stepper-count { display: none; }
   .step { max-width: 100%; }
   .step-title { font-size: 24px; }
