@@ -144,6 +144,19 @@ def _normalize_sections(lesson: dict) -> list:
                         for it in (m.get("items") or [])
                         if isinstance(it, dict) and (it.get("term") or it.get("def"))
                     ]
+                elif t == "quiz":
+                    # inline self-check: validate items, keep answer inline (the
+                    # client grades these locally; they don't touch mastery)
+                    m["items"] = [
+                        {
+                            "question": it.get("question", ""),
+                            "options": it.get("options") or [],
+                            "answer": int(it.get("answer", 0)),
+                            "explanation": it.get("explanation", ""),
+                        }
+                        for it in (m.get("items") or [])
+                        if isinstance(it, dict) and it.get("question")
+                    ]
                 elif t not in ("text", "example", "pitfall", "summary"):
                     continue
                 modules.append({**m, "type": t})
@@ -174,7 +187,7 @@ def _persist_lesson(node_id: str, lesson: dict) -> None:
         (node_id,),
     )
     conn.execute("DELETE FROM quiz_items WHERE node_id = ?", (node_id,))
-    for q in lesson.get("quiz", []):
+    for q in lesson.get("test", []):
         conn.execute(
             "INSERT INTO quiz_items (id, node_id, question, options, answer, explanation) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -291,7 +304,7 @@ def generate(node_id: str) -> None:
         # minimal validation of the shape we rely on
         if not isinstance(lesson, dict):
             raise ValueError("LLM returned a non-object payload")
-        lesson["quiz"] = lesson.get("quiz") or []
+        lesson["test"] = lesson.get("test") or []
         lesson["flashcards"] = lesson.get("flashcards") or []
         lesson["title"] = lesson.get("title") or row["title"]
         lesson["summary"] = lesson.get("summary") or ""

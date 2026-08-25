@@ -25,7 +25,7 @@ USER_TEMPLATE = (
     '  "title": "a short, specific title",\n'
     '  "summary": "one sentence on what the learner will get from this",\n'
     '  "sections": [ { "title": "optional section heading", "modules": [ ... ] } ],\n'
-    '  "quiz": [ ... ],\n'
+    '  "test": [ ... ],\n'
     '  "flashcards": [ ... ],\n'
     '  "prerequisites": ["1-3 short titles of things to understand first"],\n'
     '  "extensions": ["1-3 short titles of natural next questions"]\n'
@@ -36,12 +36,14 @@ USER_TEMPLATE = (
     "- pitfall: {\"type\":\"pitfall\",\"trap\":\"what people wrongly think\",\"truth\":\"the correction\"}\n"
     "- diagram: {\"type\":\"diagram\",\"body\":\"a Mermaid flowchart (start with exactly: flowchart TD). Use ONLY these arrows: -->, -->|label|, -.->, ==> . Write every node as id['label'] with a no-space id (e.g. A['Input data']), one node per line, 6-10 nodes.\"}\n"
     "- key_terms: {\"type\":\"key_terms\",\"items\":[{\"term\":\"Word\",\"def\":\"one-line definition\"}]}\n"
+    "- quiz: {\"type\":\"quiz\",\"items\":[{\"question\":\"...\",\"options\":[\"a\",\"b\",\"c\",\"d\"],\"answer\":0,\"explanation\":\"why right and why others wrong\"}]} — a quick inline self-check of 1-3 items with instant feedback\n"
     "- summary: {\"type\":\"summary\",\"body\":\"2-3 bullet takeaway points in Markdown\"}\n"
     "\n"
     "RULES:\n"
     "- sections is 2-5 sections; each has 1-6 modules. Structure the lesson as a coherent journey, not a fixed template.\n"
     "- You may repeat module types and include as many or as few of each as the topic needs.\n"
-    "- quiz is 2-6 items: [ {\"question\":\"...\",\"options\":[\"a\",\"b\",\"c\",\"d\"],\"answer\":0,\"explanation\":\"why right and why others wrong\"} ]. answer is the integer index (0-3) of the correct option.\n"
+    "- quiz modules may appear anywhere in the flow as quick checks. Do not put more than 3 quiz modules in a lesson.\n"
+    "- test is 2-6 items: [ {\"question\":\"...\",\"options\":[\"a\",\"b\",\"c\",\"d\"],\"answer\":0,\"explanation\":\"why right and why others wrong\"} ]. answer is the integer index (0-3) of the correct option.\n"
     "- flashcards is 2-6 items: [ {\"front\":\"...\",\"back\":\"...\"} ].\n"
     "- Options must be plausible; distractors wrong but tempting.\n"
     "- If source material is provided, base everything strictly on it.\n"

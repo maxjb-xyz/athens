@@ -395,6 +395,9 @@ async function renderBlock() {
       stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Key terms")}</div><h2 class="step-title">${escapeHtml(heading || "Words to know")}</h2>
         <div class="keyterms">${(block.items || []).map((it) => `<div class="keyterm"><span class="kt-t">${escapeHtml(it.term)}</span><span class="kt-d">${escapeHtml(it.def)}</span></div>`).join("")}</div></div>`;
       break;
+    case "quiz":
+      renderInlineQuiz(stage, block);
+      break;
     default:
       stage.innerHTML = `<div class="step"><p class="flip-hint">(unknown module)</p></div>`;
   }
@@ -429,15 +432,16 @@ async function renderDiagram(code) {
         // getBoundingClientRect reports the full nowrap text width even when
         // the foreignObject viewport clips it — that's the width we need
         const need = Math.ceil(label.getBoundingClientRect().width) + 8;
-        const curW = parseFloat(fo.getAttribute("width"));
-        const curX = parseFloat(fo.getAttribute("x"));
-        const rectW = parseFloat(rect.getAttribute("width"));
+        const curW = parseFloat(fo.getAttribute("width")) || 0;
+        const curX = parseFloat(fo.getAttribute("x")) || 0;
+        const rectW = parseFloat(rect.getAttribute("width")) || 0;
+        const rectX = parseFloat(rect.getAttribute("x")) || 0;
         if (need > curW) {
           const grow = need - curW;
           fo.setAttribute("width", need);
           fo.setAttribute("x", curX - grow / 2);
           rect.setAttribute("width", rectW + grow);
-          rect.setAttribute("x", parseFloat(rect.getAttribute("x")) - grow / 2);
+          rect.setAttribute("x", rectX - grow / 2);
         }
       });
     });
@@ -448,6 +452,63 @@ async function renderDiagram(code) {
 }
 
 // ---------------- quiz (one question at a time) ----------------
+// Inline quiz module: quick self-check with instant feedback. The answer is
+// embedded in the module (unlike the graded test), so this grades locally and
+// does not touch mastery.
+function renderInlineQuiz(stage, block) {
+  const items = block.items || [];
+  if (!items.length) { stage.innerHTML = '<p class="flip-hint">(empty quiz)</p>'; return; }
+  const heading = block.heading || block.section || "Quick check";
+  stage.innerHTML = `
+    <div class="step">
+      <div class="step-kicker">${escapeHtml(block.section || "Quick check")}</div>
+      <h2 class="step-title">${escapeHtml(heading)}</h2>
+      <div class="quiz-progress">
+        <span class="quiz-count">${items.length} quick check${items.length > 1 ? "s" : ""}</span>
+      </div>
+      <div id="inline-quiz"></div>
+    </div>`;
+  const wrap = stage.querySelector("#inline-quiz");
+  let idx = 0;
+  const renderItem = () => {
+    if (idx >= items.length) {
+      wrap.innerHTML = '<p class="flip-hint">All checked. Continue when ready.</p>';
+      return;
+    }
+    const item = items[idx];
+    wrap.innerHTML = `
+      <div class="quiz-q">
+        <div class="qq">${md(item.question)}</div>
+        <div class="quiz-opts">
+          ${item.options.map((o, oi) => `
+            <button class="option" data-oi="${oi}">
+              <span class="marker">${String.fromCharCode(65 + oi)}</span><span>${md(o)}</span>
+            </button>`).join("")}
+        </div>
+        <div class="explanation" hidden></div>
+        <div class="quiz-nav" hidden>
+          <button class="btn-primary" id="iq-next">${idx < items.length - 1 ? "Next" : "Done"}</button>
+        </div>
+      </div>`;
+    wrap.querySelectorAll(".option").forEach((opt) => {
+      opt.addEventListener("click", () => {
+        if (opt.disabled) return;
+        const oi = +opt.dataset.oi;
+        wrap.querySelectorAll(".option").forEach((o) => {
+          o.disabled = true;
+          if (+o.dataset.oi === item.answer) o.classList.add("correct");
+          else if (+o.dataset.oi === oi) o.classList.add("wrong");
+        });
+        const ex = wrap.querySelector(".explanation");
+        ex.hidden = false;
+        ex.innerHTML = md(item.explanation);
+        wrap.querySelector(".quiz-nav").hidden = false;
+      });
+    });
+    wrap.querySelector("#iq-next").addEventListener("click", () => { idx++; renderItem(); });
+  };
+  renderItem();
+}
 function renderQuizStep(stage, nav) {
   const c = lessonCtx;
   const items = c.node.quiz || [];
@@ -462,7 +523,7 @@ function renderQuizQuestion(stage, q, items) {
   const item = items[q.index];
   stage.innerHTML = `
     <div class="step">
-      <div class="step-kicker">Check yourself</div>
+      <div class="step-kicker">Test yourself</div>
       <div class="quiz-progress">
         <span class="quiz-count">Question ${q.index + 1} of ${items.length}</span>
         <span class="quiz-track">${items.map((_, i) => `<span class="quiz-dot ${i < q.index ? "seen" : i === q.index ? "current" : ""}"></span>`).join("")}</span>
@@ -575,6 +636,12 @@ function openEditor() {
   const lesson = c.node.lesson || {};
   const stage = document.getElementById("stage");
   const nav = document.getElementById("nav");
+  // edit the live content shape: sections/modules + test + flashcards.
+  // title/summary get dedicated fields; everything else is raw JSON.
+  const contentOnly = { ...lesson };
+  delete contentOnly.title;
+  delete contentOnly.summary;
+  const raw = JSON.stringify(contentOnly, null, 2) || "{}";
   stage.innerHTML = `
     <div class="step">
       <div class="step-kicker">Edit</div>
@@ -582,10 +649,10 @@ function openEditor() {
       <div class="edit-form">
         <label>Title <input id="ed-title" value="${escapeHtml(c.node.title)}" /></label>
         <label>Summary <textarea id="ed-summary" rows="2">${escapeHtml(lesson.summary || c.node.summary || "")}</textarea></label>
-        <label>Definition <textarea id="ed-def" rows="4">${escapeHtml(lesson.definition || "")}</textarea></label>
-        <label>Worked example <textarea id="ed-ex" rows="4">${escapeHtml(lesson.worked_example || "")}</textarea></label>
-        <label>Misconception <textarea id="ed-mis" rows="3">${escapeHtml(lesson.misconception || "")}</textarea></label>
-        <label>Diagram (Mermaid) <textarea id="ed-diagram" rows="5">${escapeHtml(lesson.diagram || "")}</textarea></label>
+        <label>Content (JSON — sections, test, flashcards)
+          <textarea id="ed-content" rows="18" spellcheck="false">${escapeHtml(raw)}</textarea>
+        </label>
+        <p class="progress-sub">Edit the structure freely: add/remove/reorder modules of any type. <code>quiz</code> modules are inline checks; <code>test</code> is the graded final check.</p>
       </div>
     </div>`;
   nav.innerHTML = `
@@ -593,13 +660,17 @@ function openEditor() {
     <button class="btn-primary" id="ed-save">Save changes</button>`;
   document.getElementById("ed-cancel").addEventListener("click", () => renderLesson());
   document.getElementById("ed-save").addEventListener("click", async () => {
+    let content = null;
+    try {
+      content = JSON.parse(document.getElementById("ed-content").value);
+    } catch (e) {
+      alert("Content isn't valid JSON: " + e.message);
+      return;
+    }
     const body = {
       title: document.getElementById("ed-title").value.trim() || null,
       summary: document.getElementById("ed-summary").value.trim() || null,
-      definition: document.getElementById("ed-def").value.trim() || null,
-      worked_example: document.getElementById("ed-ex").value.trim() || null,
-      misconception: document.getElementById("ed-mis").value.trim() || null,
-      diagram: document.getElementById("ed-diagram").value.trim() || null,
+      content,
     };
     await api(`/api/nodes/${c.node.id}`, { method: "PATCH", body });
     render();

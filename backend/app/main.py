@@ -42,10 +42,7 @@ class ReviewSubmit(BaseModel):
 class EditNodeRequest(BaseModel):
     title: str | None = None
     summary: str | None = None
-    definition: str | None = None
-    worked_example: str | None = None
-    misconception: str | None = None
-    diagram: str | None = None
+    content: dict | None = None
 
 
 class SettingsRequest(BaseModel):
@@ -240,12 +237,19 @@ def edit_node(node_id: str, req: EditNodeRequest):
         conn.execute("UPDATE nodes SET title = ? WHERE id = ?", (req.title, node_id))
     if req.summary is not None:
         conn.execute("UPDATE nodes SET summary = ? WHERE id = ?", (req.summary, node_id))
-    for field in ("definition", "worked_example", "misconception", "diagram"):
-        val = getattr(req, field)
-        if val is not None:
-            lesson[field] = val
-    if any(getattr(req, f) is not None for f in ("definition", "worked_example", "misconception", "diagram")):
-        conn.execute("UPDATE nodes SET content = ? WHERE id = ?", (json.dumps(lesson, ensure_ascii=False), node_id))
+    if req.content is not None:
+        # full content replacement: re-normalize sections and re-persist the
+        # graded test + flashcards so the SRS tables stay consistent
+        content = dict(req.content)
+        content["sections"] = generator._normalize_sections(content)
+        content["test"] = content.get("test") or []
+        content["flashcards"] = content.get("flashcards") or []
+        # req.title / req.summary win over content's own, then row fallback
+        content["title"] = (req.title or "").strip() or content.get("title") or row["title"]
+        content["summary"] = (req.summary or "").strip() or content.get("summary") or ""
+        generator._persist_lesson(node_id, content)
+        conn.execute("UPDATE nodes SET title = ?, summary = ? WHERE id = ?",
+                     (content["title"], content["summary"], node_id))
     conn.commit()
     return {"ok": True}
 

@@ -134,11 +134,51 @@ def mock_lesson(topic: str) -> dict:
     return {
         "title": title,
         "summary": f"A self-contained walkthrough of {t}, with a worked example and a check on your understanding.",
-        "definition": definition,
-        "worked_example": worked_example,
-        "misconception": misconception,
-        "diagram": diagram,
-        "quiz": quiz,
+        "sections": [
+            {
+                "title": "The idea",
+                "modules": [
+                    {"type": "text", "heading": "In plain words", "body": definition},
+                    {"type": "key_terms", "items": [{"term": "Anchor sentence", "def": "The one plain sentence that captures what the idea is and why it matters."}, {"term": "Concrete instance", "def": "A single real example you can rebuild from nothing."}]},
+                ],
+            },
+            {
+                "title": "An example",
+                "modules": [
+                    {"type": "example", "heading": "Watch it work", "body": worked_example},
+                    {"type": "quiz", "items": [{
+                        "question": f"Which habit most reliably turns reading about {t} into understanding {t}?",
+                        "options": [
+                            "Working a concrete example forwards and backwards",
+                            "Rereading the definition until it feels familiar",
+                            "Highlighting every technical term",
+                            "Skipping straight to advanced edge cases",
+                        ],
+                        "answer": 0,
+                        "explanation": "Re-deriving the idea from a concrete example is what converts recognition into the ability to rebuild it.",
+                    }]},
+                ],
+            },
+            {
+                "title": "The trap",
+                "modules": [
+                    {"type": "pitfall", "trap": "Treating the surface definition as the whole idea", "truth": misconception},
+                ],
+            },
+            {
+                "title": "The shape of it",
+                "modules": [
+                    {"type": "diagram", "body": diagram},
+                ],
+            },
+            {
+                "title": "Wrap up",
+                "modules": [
+                    {"type": "summary", "body": "- Anchor on one plain sentence.\n- Rebuild it from a concrete example.\n- Re-check the shaky prerequisite before moving on."},
+                ],
+            },
+        ],
+        "test": quiz,
         "flashcards": flashcards,
         "prerequisites": ["The core idea this builds on"],
         "extensions": ["Where this idea leads next"],
