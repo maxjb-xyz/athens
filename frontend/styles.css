@@ -176,16 +176,18 @@ html, body {
 
 /* ---------- lesson stepper ---------- */
 .stepper {
-  display: flex; align-items: flex-start; gap: 14px;
   margin: 18px 0 26px;
+}
+.stepper-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 9px;
 }
 .stepper-sec {
   font-size: 13px; font-weight: 600; color: var(--ink-soft);
   text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
-  padding-top: 22px;
 }
-.stepper-segs { flex: 1; display: flex; align-items: flex-end; gap: 4px; min-width: 0; }
-.stepper-dash-group { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.stepper-segs { display: flex; align-items: flex-end; gap: 4px; }
+.stepper-dash-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
 .stepper-label {
   font-size: 10px; font-weight: 600; color: var(--ink-faint);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
@@ -201,7 +203,7 @@ html, body {
 .stepper-dash-group .seg.cur { background: var(--terracotta); }
 .stepper-dash-group .seg.locked { cursor: default; opacity: 0.35; }
 .stepper-divider { width: 1px; background: var(--border); align-self: stretch; flex: none; margin-top: 15px; }
-.stepper-count { font-size: 13px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; padding-top: 20px; }
+.stepper-count { font-size: 13px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
 
 /* key terms module */
 .keyterms { display: flex; flex-direction: column; gap: 10px; }
@@ -537,11 +539,12 @@ html, body {
   /* lesson */
   .lesson { padding: 22px 18px; border-radius: 12px; }
   .lesson-crumb { flex-wrap: wrap; row-gap: 4px; margin-bottom: 16px; }
-  .stepper { gap: 8px; margin: 14px 0 20px; }
-  .stepper-sec { display: none; }
+  .stepper { margin: 14px 0 20px; }
+  .stepper-head { margin-bottom: 7px; }
+  .stepper-sec { font-size: 12px; }
+  .stepper-count { font-size: 12px; }
   .stepper-segs { overflow-x: auto; padding-bottom: 4px; }
   .stepper-dash-group { flex: none; }
-  .stepper-count { display: none; }
   .step { max-width: 100%; }
   .step-title { font-size: 24px; }
   .lesson-nav { margin-top: 24px; }

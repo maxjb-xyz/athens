@@ -221,12 +221,17 @@ function blockLabel(block) {
 
 function stepperHtml(blocks, step, maxStep) {
   const key = (b) => (b.section || "kind:" + b.kind);
+  const introCount = blocks.filter(b => b.kind === "intro").length;
   let html = '';
   blocks.forEach((b, i) => {
     if (i > 0 && key(blocks[i-1]) !== key(b)) html += '<span class="stepper-divider"></span>';
     const cls = i < step ? 'seg done' : i === step ? 'seg cur' : 'seg';
     const locked = i > maxStep ? ' locked' : '';
-    html += `<span class="stepper-dash-group"><span class="stepper-label">${escapeHtml(blockLabel(b))}</span><button class="${cls}${locked}" data-step="${i}" title="${escapeHtml(blockLabel(b))}"${locked ? ' disabled' : ''}></button></span>`;
+    // the "Intro" section name already sits above the bar, so a lone intro
+    // block keeps just its dash instead of a second "Intro" word
+    const label = (b.kind === "intro" && introCount === 1) ? '' :
+      `<span class="stepper-label">${escapeHtml(blockLabel(b))}</span>`;
+    html += `<span class="stepper-dash-group">${label}<button class="${cls}${locked}" data-step="${i}" title="${escapeHtml(blockLabel(b))}"${locked ? ' disabled' : ''}></button></span>`;
   });
   return html;
 }
@@ -312,9 +317,11 @@ async function renderLesson() {
         <button class="crumb-link danger" id="act-del">Delete</button>
       </div>
       <div class="stepper">
-        <span class="stepper-sec">${escapeHtml(curSection)}</span>
+        <div class="stepper-head">
+          <span class="stepper-sec">${escapeHtml(curSection)}</span>
+          <span class="stepper-count">${c.step + 1} / ${total}</span>
+        </div>
         <div class="stepper-segs">${stepperHtml(blocks, c.step, c.maxStep)}</div>
-        <span class="stepper-count">${c.step + 1} / ${total}</span>
       </div>
       <div class="lesson-stage" id="stage"></div>
       <div class="lesson-nav" id="nav"></div>
