@@ -218,35 +218,25 @@ async function renderNode(id) {
   }
 
   const done = node.mastery && node.mastery.attempts > 0;
-  const saved = loadProgress(id);
+  const saved = node.progress ? node.progress.step : 0;
+  const startStep = done ? STEPS.length - 1 : (saved > 0 ? saved : 0);
   lessonCtx = {
     node,
-    step: done ? STEPS.length - 1 : (saved ? saved : 0),
-    maxStep: done ? STEPS.length - 1 : (saved ? STEPS.length - 1 : 0),
+    step: startStep,
+    maxStep: done || saved > 0 ? STEPS.length - 1 : 0,
     quiz: { index: 0, answers: [], correct: 0, results: null },
     summary: null,
   };
   renderLesson();
 }
 
-// persist per-node lesson progress so a completed or partially-read lesson
-// reopens where the learner left off instead of resetting to the intro
-const PROGRESS_KEY = "athens.progress.v1";
-
-function loadProgress(nodeId) {
-  try {
-    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}");
-    const step = data[nodeId];
-    return Number.isInteger(step) && step > 0 ? step : 0;
-  } catch { return 0; }
-}
-
+// persist per-node lesson progress on the server so it survives browser and
+// device changes, not just this browser's localStorage
 function saveProgress(nodeId, step) {
-  try {
-    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}");
-    data[nodeId] = step;
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(data));
-  } catch { /* ignore */ }
+  api(`/api/nodes/${nodeId}/progress`, {
+    method: "PUT",
+    body: { step, max_step: STEPS.length - 1 },
+  }).catch(() => { /* best-effort; don't interrupt the learner */ });
 }
 
 async function pollNode(id) {
@@ -410,9 +400,9 @@ async function renderDiagram(code) {
     }, flowchart: { padding: 16, nodeSpacing: 80, rankSpacing: 80, useMaxWidth: true } });
     const { svg } = await mermaid.render("diagram-" + Math.random().toString(36).slice(2), code);
     box.innerHTML = svg;
-    // mermaid measures label width with SVG text metrics but renders via
-    // HTML foreignObject, which is ~10% wider for serif fonts — widen each
-    // node box + label container to fit the real rendered text.
+    // mermaid sizes foreignObject boxes from SVG text metrics, which are a
+    // bit narrower than the HTML the label actually renders as — so text can
+    // clip. Measure each label's real scrollWidth and widen the box to fit.
     requestAnimationFrame(() => {
       const svgEl = box.querySelector("svg");
       if (!svgEl) return;
@@ -420,18 +410,19 @@ async function renderDiagram(code) {
         const fo = node.querySelector("foreignObject");
         const label = node.querySelector(".nodeLabel");
         const rect = node.querySelector("rect.label-container, rect");
-        if (!fo || !label) return;
-        const text = label.textContent || "";
-        const w = text.length * 8.6 + 24; // rough glyph-width for 15px serif + padding
-        if (w > +fo.getAttribute("width")) {
-          fo.setAttribute("width", w);
-          const dx = (w - +fo.getAttribute("width")) / 2 || 0;
-          const tx = +fo.getAttribute("x") - dx;
-          fo.setAttribute("x", tx);
-          if (rect) {
-            rect.setAttribute("width", w);
-            rect.setAttribute("x", -w / 2);
-          }
+        if (!fo || !label || !rect) return;
+        // getBoundingClientRect reports the full nowrap text width even when
+        // the foreignObject viewport clips it — that's the width we need
+        const need = Math.ceil(label.getBoundingClientRect().width) + 8;
+        const curW = parseFloat(fo.getAttribute("width"));
+        const curX = parseFloat(fo.getAttribute("x"));
+        const rectW = parseFloat(rect.getAttribute("width"));
+        if (need > curW) {
+          const grow = need - curW;
+          fo.setAttribute("width", need);
+          fo.setAttribute("x", curX - grow / 2);
+          rect.setAttribute("width", rectW + grow);
+          rect.setAttribute("x", parseFloat(rect.getAttribute("x")) - grow / 2);
         }
       });
     });

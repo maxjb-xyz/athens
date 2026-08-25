@@ -107,6 +107,16 @@ MIGRATIONS = [
         # when a card was first introduced (for the daily new-card budget)
         "ALTER TABLE flashcards ADD COLUMN introduced_at REAL DEFAULT 0",
     ]),
+    (3, [
+        # per-node lesson progress (survives browser/device changes)
+        """
+        CREATE TABLE node_progress (
+            node_id   TEXT PRIMARY KEY,
+            step      INTEGER DEFAULT 0,
+            max_step  INTEGER DEFAULT 0,
+            updated_at REAL DEFAULT 0
+        )""",
+    ]),
 ]
 
 

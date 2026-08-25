@@ -56,6 +56,11 @@ class SettingsRequest(BaseModel):
     daily_new_limit: int | None = None
 
 
+class ProgressRequest(BaseModel):
+    step: int
+    max_step: int
+
+
 _RATING_TO_QUALITY = {"again": 0, "hard": 3, "good": 4, "easy": 5}
 
 
@@ -197,7 +202,24 @@ def get_node(node_id: str):
     out["flashcards"] = cards
     out["mastery"] = _mastery(node_id)
     out["error"] = row["error"]
+    prog = conn.execute("SELECT step, max_step FROM node_progress WHERE node_id = ?", (node_id,)).fetchone()
+    out["progress"] = {"step": prog["step"] if prog else 0, "max_step": prog["max_step"] if prog else 0}
     return out
+
+
+@app.put("/api/nodes/{node_id}/progress")
+def save_progress(node_id: str, req: ProgressRequest):
+    conn = db.db()
+    row = conn.execute("SELECT id FROM nodes WHERE id = ?", (node_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "node not found")
+    conn.execute(
+        "INSERT INTO node_progress (node_id, step, max_step, updated_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(node_id) DO UPDATE SET step=excluded.step, max_step=excluded.max_step, updated_at=excluded.updated_at",
+        (node_id, req.step, req.max_step, db.now()),
+    )
+    conn.commit()
+    return {"ok": True}
 
 
 @app.patch("/api/nodes/{node_id}")
