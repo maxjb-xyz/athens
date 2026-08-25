@@ -84,8 +84,15 @@ function contrast(hex1, hex2) {
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: SHOT_DIR + '/intro.png' });
 
-    // walk to diagram
-    for (let i = 0; i < 4; i++) { await page.click('#nav-fwd'); await page.waitForTimeout(250); }
+    // walk blocks until we hit a diagram module (structure is now flexible)
+    for (let i = 0; i < 20; i++) {
+      const hasDiagram = await page.evaluate(() => !!document.querySelector('.diagram-box svg, #diagram-box'));
+      if (hasDiagram) break;
+      const fwd = await page.$('#nav-fwd');
+      if (!fwd) break;
+      await fwd.click();
+      await page.waitForTimeout(400);
+    }
     await page.waitForTimeout(1600);
     await page.screenshot({ path: SHOT_DIR + '/diagram.png' });
 

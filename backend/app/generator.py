@@ -118,6 +118,54 @@ def _quote_bare_labels(line: str) -> str:
     return "".join(out)
 
 
+def _normalize_sections(lesson: dict) -> list:
+    """Turn the model's `sections` into a clean, validated list of modules.
+
+    Falls back to the legacy flat fields (definition/worked_example/
+    misconception/diagram) so old-format lessons and misbehaving models still
+    render. Every diagram module body is cleaned through _clean_diagram.
+    """
+    raw = lesson.get("sections")
+    if isinstance(raw, list) and raw:
+        sections = []
+        for sec in raw:
+            if not isinstance(sec, dict):
+                continue
+            modules = []
+            for m in sec.get("modules") or []:
+                if not isinstance(m, dict) or not m.get("type"):
+                    continue
+                t = str(m["type"]).strip().lower()
+                if t == "diagram":
+                    m["body"] = _clean_diagram(m.get("body") or "")
+                elif t == "key_terms":
+                    m["items"] = [
+                        {"term": it.get("term", ""), "def": it.get("def", "")}
+                        for it in (m.get("items") or [])
+                        if isinstance(it, dict) and (it.get("term") or it.get("def"))
+                    ]
+                elif t not in ("text", "example", "pitfall", "summary"):
+                    continue
+                modules.append({**m, "type": t})
+            if modules:
+                sections.append({"title": sec.get("title") or "", "modules": modules})
+        if sections:
+            return sections
+    # legacy flat-shape fallback
+    secs = []
+    if lesson.get("definition"):
+        secs.append({"title": "The idea", "modules": [{"type": "text", "heading": "In plain words", "body": lesson["definition"]}]})
+    if lesson.get("worked_example"):
+        secs.append({"title": "An example", "modules": [{"type": "example", "heading": "Watch it work", "body": lesson["worked_example"]}]})
+    if lesson.get("misconception"):
+        secs.append({"title": "A trap", "modules": [{"type": "pitfall", "trap": "What people get wrong", "truth": lesson["misconception"]}]})
+    if lesson.get("diagram"):
+        secs.append({"title": "The shape of it", "modules": [{"type": "diagram", "body": _clean_diagram(lesson["diagram"])}]})
+    if not secs:
+        secs.append({"title": "", "modules": [{"type": "text", "heading": "", "body": "(content not generated)"}]})
+    return secs
+
+
 def _persist_lesson(node_id: str, lesson: dict) -> None:
     conn = db.db()
     # replace quiz items (clean quiz_stats first — it references quiz_items)
@@ -243,14 +291,11 @@ def generate(node_id: str) -> None:
         # minimal validation of the shape we rely on
         if not isinstance(lesson, dict):
             raise ValueError("LLM returned a non-object payload")
-        for key in ("definition", "worked_example", "misconception", "diagram"):
-            if not lesson.get(key):
-                lesson[key] = f"({key.replace('_', ' ')} not generated)"
-        lesson["diagram"] = _clean_diagram(lesson.get("diagram", ""))
         lesson["quiz"] = lesson.get("quiz") or []
         lesson["flashcards"] = lesson.get("flashcards") or []
         lesson["title"] = lesson.get("title") or row["title"]
         lesson["summary"] = lesson.get("summary") or ""
+        lesson["sections"] = _normalize_sections(lesson)
 
         _persist_lesson(node_id, lesson)
         # Only grow the graph on first generation. On regenerate, the graph

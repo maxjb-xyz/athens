@@ -184,18 +184,42 @@ function masteryPill(status, mastery) {
   return `<span class="mastery-pill" data-m="${m}"><span class="mastery-bar"><span class="mastery-fill" style="width:${m}%"></span></span>${m}%</span>`;
 }
 
-// ---------------- lesson stepper ----------------
-const STEPS = [
-  { key: "intro", label: "Intro" },
-  { key: "idea", label: "Idea" },
-  { key: "example", label: "Example" },
-  { key: "pitfall", label: "Pitfall" },
-  { key: "diagram", label: "Diagram" },
-  { key: "check", label: "Check" },
-  { key: "done", label: "Done" },
-];
+// ---------------- lesson (section / module driven) ----------------
+let lessonCtx = null; // { node, blocks, step, maxStep, quiz, summary }
 
-let lessonCtx = null; // { node, step, maxStep, quiz: {index, answers, correct, results} }
+// Flatten the lesson's sections into a linear list of renderable blocks:
+// intro -> (each module) -> check (quiz) -> done.
+function buildBlocks(node) {
+  const lesson = node.lesson || {};
+  const blocks = [];
+  const toc = [];
+  for (const sec of (lesson.sections || [])) {
+    const n = (sec.modules || []).length;
+    if (n) toc.push({ title: sec.title, count: n });
+  }
+  blocks.push({
+    kind: "intro",
+    toc,
+    hasQuiz: (node.quiz || []).length > 0,
+    hasCards: (node.flashcards || []).length > 0,
+  });
+  for (const sec of (lesson.sections || [])) {
+    for (const m of (sec.modules || [])) {
+      blocks.push({ section: sec.title, ...m });
+    }
+  }
+  if ((node.quiz || []).length) blocks.push({ kind: "check" });
+  blocks.push({ kind: "done" });
+  return blocks;
+}
+
+function blockLabel(block) {
+  if (block.kind === "intro") return "Intro";
+  if (block.kind === "check") return "Check";
+  if (block.kind === "done") return "Done";
+  const labels = { text: "Explain", example: "Example", pitfall: "Pitfall", diagram: "Diagram", key_terms: "Key terms", summary: "Summary" };
+  return labels[block.type] || "Learn";
+}
 
 async function renderNode(id) {
   const node = await api("/api/nodes/" + id);
@@ -217,13 +241,15 @@ async function renderNode(id) {
     return;
   }
 
+  const blocks = buildBlocks(node);
   const done = node.mastery && node.mastery.attempts > 0;
   const saved = node.progress ? node.progress.step : 0;
-  const startStep = done ? STEPS.length - 1 : (saved > 0 ? saved : 0);
+  const startStep = done ? blocks.length - 1 : (saved > 0 && saved < blocks.length ? saved : 0);
   lessonCtx = {
     node,
+    blocks,
     step: startStep,
-    maxStep: done || saved > 0 ? STEPS.length - 1 : 0,
+    maxStep: done || saved > 0 ? blocks.length - 1 : 0,
     quiz: { index: 0, answers: [], correct: 0, results: null },
     summary: null,
   };
@@ -235,18 +261,16 @@ async function renderNode(id) {
 function saveProgress(nodeId, step) {
   api(`/api/nodes/${nodeId}/progress`, {
     method: "PUT",
-    body: { step, max_step: STEPS.length - 1 },
+    body: { step, max_step: lessonCtx.blocks.length - 1 },
   }).catch(() => { /* best-effort; don't interrupt the learner */ });
 }
 
 async function pollNode(id) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  let seenGenerating = false;
   for (let i = 0; i < 160; i++) {
     await wait(2000);
     const node = await api("/api/nodes/" + id);
     if (node.status === "ready" || node.status === "failed") { render(); return; }
-    seenGenerating = true;
   }
   // safety valve — give up after ~5 minutes and let the user retry
   render();
@@ -254,20 +278,10 @@ async function pollNode(id) {
 
 async function renderLesson() {
   const c = lessonCtx;
-  const lesson = c.node.lesson || {};
-  const active = STEPS[c.step];
-  const hasDiagram = !!lesson.diagram;
-
-  const stepsHtml = STEPS.map((s, i) => {
-    const reachable = i <= c.maxStep;
-    const isActive = i === c.step;
-    const skip = s.key === "diagram" && !hasDiagram;
-    const cls = ["step-pill"];
-    if (isActive) cls.push("active");
-    if (reachable && !isActive) cls.push("seen");
-    if (skip) cls.push("skip");
-    return `<button class="${cls.join(" ")}" data-i="${i}" ${reachable && !skip ? "" : "disabled"}>${s.label}</button>`;
-  }).join("");
+  const blocks = c.blocks;
+  const total = blocks.length;
+  const block = blocks[c.step];
+  const pct = Math.round((c.step / (total - 1)) * 100);
 
   view.innerHTML = `
     <div class="lesson">
@@ -278,17 +292,17 @@ async function renderLesson() {
         <button class="crumb-link" id="act-regen">Regenerate</button>
         <button class="crumb-link danger" id="act-del">Delete</button>
       </div>
-      <div class="stepper" id="stepper">${stepsHtml}</div>
+      <div class="stepper" id="stepper">
+        <span class="stepper-sec">${escapeHtml(block.section || blockLabel(block))}</span>
+        <span class="stepper-track"><span class="stepper-fill" style="width:${pct}%"></span></span>
+        <span class="stepper-count">${c.step + 1} / ${total}</span>
+      </div>
       <div class="lesson-stage" id="stage"></div>
       <div class="lesson-nav" id="nav"></div>
     </div>
   `;
 
   document.querySelectorAll("[data-nav='map']").forEach((b) => b.addEventListener("click", () => navigate("map")));
-  document.querySelectorAll(".step-pill").forEach((b) => b.addEventListener("click", () => {
-    const i = +b.dataset.i;
-    if (i <= c.maxStep && !b.disabled) { c.step = i; renderLesson(); }
-  }));
   document.getElementById("act-regen").addEventListener("click", async () => {
     if (!confirm("Regenerate this lesson's content? Existing quiz and cards will be replaced.")) return;
     await api(`/api/nodes/${c.node.id}/regenerate`, { method: "POST" });
@@ -301,7 +315,7 @@ async function renderLesson() {
   });
   document.getElementById("act-edit").addEventListener("click", () => openEditor());
 
-  await renderStep();
+  await renderBlock();
 }
 
 function lessonNavHtml(back = true, forward = true, forwardLabel = "Continue") {
@@ -311,81 +325,82 @@ function lessonNavHtml(back = true, forward = true, forwardLabel = "Continue") {
   `;
 }
 
-async function renderStep() {
+function bindNav() {
+  const back = document.getElementById("nav-back");
+  const fwd = document.getElementById("nav-fwd");
+  if (back) back.addEventListener("click", () => { lessonCtx.step--; renderLesson(); });
+  if (fwd) fwd.addEventListener("click", () => advance());
+}
+
+function advance() {
+  const c = lessonCtx;
+  c.step++;
+  c.maxStep = Math.max(c.maxStep, c.step);
+  saveProgress(c.node.id, c.step);
+  renderLesson();
+}
+
+async function renderBlock() {
   const c = lessonCtx;
   const stage = document.getElementById("stage");
   const nav = document.getElementById("nav");
-  const lesson = c.node.lesson || {};
-  const s = STEPS[c.step];
+  const block = c.blocks[c.step];
 
   stage.innerHTML = "";
   nav.innerHTML = "";
 
-  switch (s.key) {
-    case "intro": {
-      stage.innerHTML = `
-        <div class="step-intro">
-          <div class="step-kicker">A new idea</div>
-          <h2 class="step-title">${escapeHtml(c.node.title)}</h2>
-          <p class="step-summary">${escapeHtml(lesson.summary || c.node.summary || "")}</p>
-          <div class="step-toc">
-            ${[["Idea", "the plain explanation"], ["Example", "one worked instance"], ["Pitfall", "what trips people up"], ["Check", "3 questions"]].map(([t, d]) => `<div class="toc-row"><span class="toc-t">${t}</span><span class="toc-d">${d}</span></div>`).join("")}
-          </div>
-        </div>`;
-      nav.innerHTML = lessonNavHtml(false, true, "Begin");
-      bindNav(1);
-      break;
-    }
-    case "idea": {
-      stage.innerHTML = `<div class="step"><div class="step-kicker">The idea</div><h2 class="step-title">In plain words</h2><div class="md step-body">${md(lesson.definition)}</div></div>`;
-      nav.innerHTML = lessonNavHtml(true, true);
-      bindNav(2);
-      break;
-    }
-    case "example": {
-      stage.innerHTML = `<div class="step"><div class="step-kicker">An example</div><h2 class="step-title">Watch it work</h2><div class="md step-body">${md(lesson.worked_example)}</div></div>`;
-      nav.innerHTML = lessonNavHtml(true, true);
-      bindNav(3);
-      break;
-    }
-    case "pitfall": {
-      stage.innerHTML = `<div class="step"><div class="step-kicker">A trap</div><h2 class="step-title">Watch out for this</h2><div class="callout">${md(lesson.misconception)}</div></div>`;
-      nav.innerHTML = lessonNavHtml(true, true);
-      bindNav(4);
-      break;
-    }
-    case "diagram": {
-      if (!lesson.diagram) { c.step++; renderLesson(); return; }
-      stage.innerHTML = `<div class="step"><div class="step-kicker">The shape of it</div><h2 class="step-title">At a glance</h2><div class="diagram-box" id="diagram-box"></div></div>`;
-      nav.innerHTML = lessonNavHtml(true, true);
-      bindNav(5);
-      await renderDiagram(lesson.diagram);
-      break;
-    }
-    case "check": {
-      renderQuizStep(stage, nav);
-      break;
-    }
-    case "done": {
-      await renderDoneStep(stage, nav);
-      break;
-    }
+  if (block.kind === "intro") {
+    const toc = block.toc.length
+      ? block.toc.map((s) => `<div class="toc-row"><span class="toc-t">${escapeHtml(s.title || "—")}</span><span class="toc-d">${s.count} part${s.count > 1 ? "s" : ""}</span></div>`).join("")
+      : "";
+    stage.innerHTML = `
+      <div class="step-intro">
+        <div class="step-kicker">A new idea</div>
+        <h2 class="step-title">${escapeHtml(c.node.title)}</h2>
+        <p class="step-summary">${escapeHtml(c.node.summary || (c.node.lesson && c.node.lesson.summary) || "")}</p>
+        ${toc ? `<div class="step-toc">${toc}</div>` : ""}
+      </div>`;
+    nav.innerHTML = lessonNavHtml(false, true, "Begin");
+    bindNav();
+    return;
   }
-}
 
-function bindNav(nextStep) {
-  const back = document.getElementById("nav-back");
-  const fwd = document.getElementById("nav-fwd");
-  if (back) back.addEventListener("click", () => { lessonCtx.step--; renderLesson(); });
-  if (fwd) fwd.addEventListener("click", () => { advance(nextStep); });
-}
+  if (block.kind === "check") {
+    renderQuizStep(stage, nav);
+    return;
+  }
 
-function advance(nextStep) {
-  const c = lessonCtx;
-  c.step = nextStep;
-  c.maxStep = Math.max(c.maxStep, nextStep);
-  saveProgress(c.node.id, nextStep);
-  renderLesson();
+  if (block.kind === "done") {
+    await renderDoneStep(stage, nav);
+    return;
+  }
+
+  // content modules
+  const heading = block.heading || blockLabel(block);
+  switch (block.type) {
+    case "text":
+    case "example":
+    case "summary":
+      stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || blockLabel(block))}</div><h2 class="step-title">${escapeHtml(heading)}</h2><div class="md step-body">${md(block.body)}</div></div>`;
+      break;
+    case "pitfall":
+      stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Pitfall")}</div><h2 class="step-title">${escapeHtml(heading || "Watch out")}</h2>
+        <div class="callout"><strong>The trap:</strong> ${md(block.trap)}</div>
+        <div class="callout" style="background:var(--terracotta-soft);border-left-color:var(--terracotta);"><strong>The truth:</strong> ${md(block.truth)}</div></div>`;
+      break;
+    case "diagram":
+      stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Diagram")}</div><h2 class="step-title">${escapeHtml(heading || "At a glance")}</h2><div class="diagram-box" id="diagram-box"></div></div>`;
+      break;
+    case "key_terms":
+      stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Key terms")}</div><h2 class="step-title">${escapeHtml(heading || "Words to know")}</h2>
+        <div class="keyterms">${(block.items || []).map((it) => `<div class="keyterm"><span class="kt-t">${escapeHtml(it.term)}</span><span class="kt-d">${escapeHtml(it.def)}</span></div>`).join("")}</div></div>`;
+      break;
+    default:
+      stage.innerHTML = `<div class="step"><p class="flip-hint">(unknown module)</p></div>`;
+  }
+  nav.innerHTML = lessonNavHtml(true, true);
+  bindNav();
+  if (block.type === "diagram") await renderDiagram(block.body);
 }
 
 async function renderDiagram(code) {
@@ -436,7 +451,7 @@ async function renderDiagram(code) {
 function renderQuizStep(stage, nav) {
   const c = lessonCtx;
   const items = c.node.quiz || [];
-  if (!items.length) { stage.innerHTML = '<p class="flip-hint">No quiz for this one.</p>'; nav.innerHTML = lessonNavHtml(true, true); bindNav(6); return; }
+  if (!items.length) { stage.innerHTML = '<p class="flip-hint">No quiz for this one.</p>'; nav.innerHTML = lessonNavHtml(true, true); bindNav(); return; }
 
   const q = c.quiz;
   nav.innerHTML = "";
@@ -497,8 +512,9 @@ function renderQuizQuestion(stage, q, items) {
   if (finishBtn) finishBtn.addEventListener("click", async () => {
     const res = await api(`/api/nodes/${lessonCtx.node.id}/quiz`, { method: "POST", body: { answers: q.answers } });
     lessonCtx.summary = res;
-    lessonCtx.step = 6; lessonCtx.maxStep = 6;
-    saveProgress(lessonCtx.node.id, 6);
+    lessonCtx.step = lessonCtx.blocks.length - 1; // jump to done
+    lessonCtx.maxStep = lessonCtx.blocks.length - 1;
+    saveProgress(lessonCtx.node.id, lessonCtx.step);
     renderLesson();
   });
 }
