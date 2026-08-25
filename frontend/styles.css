@@ -207,6 +207,17 @@ html, body {
 }
 .step-title { font-family: var(--serif); font-weight: 600; font-size: clamp(24px, 3.5vw, 32px); line-height: 1.2; margin: 0 0 16px; }
 .step-summary { color: var(--ink-soft); font-size: 17px; line-height: 1.55; margin: 0 0 24px; }
+.step-sub { color: var(--ink-soft); font-size: 16.5px; line-height: 1.5; margin: -8px 0 24px; }
+.review-chooser { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 520px; }
+.chooser-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 26px 22px; cursor: pointer; text-align: left;
+  box-shadow: var(--shadow-sm); transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.chooser-card:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.chooser-card:disabled { opacity: 0.5; cursor: not-allowed; }
+.chooser-title { font-family: var(--serif); font-weight: 600; font-size: 19px; margin-bottom: 6px; }
+.chooser-sub { color: var(--ink-soft); font-size: 14px; }
 .step-body { font-size: 17px; line-height: 1.7; }
 .step-body p { font-size: 17px; line-height: 1.7; }
 .step-toc { margin-top: 8px; border-top: 1px solid var(--border); }

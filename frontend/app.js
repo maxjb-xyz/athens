@@ -41,7 +41,6 @@ async function render() {
   try {
     if (seg === "home") await renderHome();
     else if (seg === "map") await renderMap();
-    else if (seg === "review") await renderReview();
     else if (seg === "progress") await renderProgress();
     else if (seg === "settings") await renderSettings();
     else if (seg === "node" && id) await renderNode(id);
@@ -49,7 +48,6 @@ async function render() {
   } catch (e) {
     view.innerHTML = `<div class="failed-note">${escapeHtml(e.message)}</div>`;
   }
-  refreshDueBadge();
 }
 
 window.addEventListener("hashchange", render);
@@ -240,6 +238,13 @@ async function renderNode(id) {
     });
     return;
   }
+  if (node.status === "pending") {
+    // an ungenerated concept (a suggested prerequisite/extension) — generate it
+    await api(`/api/nodes/${id}/generate`, { method: "POST" }).catch(() => {});
+    view.innerHTML = `<div class="loading"><div class="spinner"></div><p>Building your lesson…</p></div>`;
+    pollNode(id);
+    return;
+  }
 
   const blocks = buildBlocks(node);
   const done = node.mastery && node.mastery.attempts > 0;
@@ -288,6 +293,7 @@ async function renderLesson() {
       <div class="lesson-crumb">
         <button class="crumb-link" data-nav="map">Map</button><span>/</span><span>${escapeHtml(c.node.title)}</span>
         <span class="crumb-spacer"></span>
+        <button class="crumb-link" id="act-review">Review</button>
         <button class="crumb-link" id="act-edit">Edit</button>
         <button class="crumb-link" id="act-regen">Regenerate</button>
         <button class="crumb-link danger" id="act-del">Delete</button>
@@ -314,6 +320,7 @@ async function renderLesson() {
     navigate("map");
   });
   document.getElementById("act-edit").addEventListener("click", () => openEditor());
+  document.getElementById("act-review").addEventListener("click", () => openReviewChooser());
 
   await renderBlock();
 }
@@ -806,57 +813,64 @@ function drawGraph(nodes, edges) {
   svg.querySelectorAll(".map-node").forEach((g) => g.addEventListener("click", () => navigate("node/" + g.dataset.id)));
 }
 
-// ---------------- review ----------------
-let reviewQueue = [];
-let reviewQuizzes = [];
-
-async function renderReview() {
-  const data = await api("/api/review");
-  reviewQueue = data.cards || [];
-  reviewQuizzes = data.quizzes || [];
-  if (!reviewQueue.length && !reviewQuizzes.length) {
-    view.innerHTML = `<div class="review-wrap"><div class="review-empty">
-      <h2>Nothing due right now</h2><p>Come back after you've learned a few things.</p>
-      <p style="margin-top:14px"><button class="btn-primary" data-nav="home">Ask a question</button></p>
-    </div></div>`;
-    view.querySelector("[data-nav='home']").addEventListener("click", () => navigate("home"));
-    return;
-  }
-  // quizzes first (quick re-test), then cards
-  if (reviewQuizzes.length) { showReviewQuiz(); return; }
-  showReviewCard();
-}
-
-function showReviewQuiz() {
-  const q = reviewQuizzes[0];
-  view.innerHTML = `
-    <div class="review-wrap">
-      <div class="review-head">
-        <h1>Review</h1>
-        <p>${reviewQuizzes.length} quiz${reviewQuizzes.length > 1 ? "zes" : ""} due · <em>${escapeHtml(q.title)}</em></p>
-      </div>
-      <div class="review-quiz-card">
-        <p class="rq-title">Your understanding of this idea is due for a re-test.</p>
-        <div class="rq-actions">
-          <button class="btn-primary" id="rq-go">Re-test now</button>
-          <button class="btn-secondary" id="rq-skip">Skip</button>
-        </div>
+// ---------------- review (per-lesson) ----------------
+function openReviewChooser() {
+  const c = lessonCtx;
+  const hasCards = (c.node.flashcards || []).length > 0;
+  const hasQuiz = (c.node.quiz || []).length > 0;
+  const stage = document.getElementById("stage");
+  const nav = document.getElementById("nav");
+  stage.innerHTML = `
+    <div class="step">
+      <div class="step-kicker">Review</div>
+      <h2 class="step-title">${escapeHtml(c.node.title)}</h2>
+      <p class="step-sub">How do you want to review this idea?</p>
+      <div class="review-chooser">
+        <button class="chooser-card" id="rv-cards" ${hasCards ? "" : "disabled"}>
+          <div class="chooser-title">Flashcards</div>
+          <div class="chooser-sub">${hasCards ? c.node.flashcards.length + " card" + (c.node.flashcards.length > 1 ? "s" : "") : "No cards yet"}</div>
+        </button>
+        <button class="chooser-card" id="rv-quiz" ${hasQuiz ? "" : "disabled"}>
+          <div class="chooser-title">Quiz</div>
+          <div class="chooser-sub">${hasQuiz ? c.node.quiz.length + " question" + (c.node.quiz.length > 1 ? "s" : "") : "No quiz yet"}</div>
+        </button>
       </div>
     </div>`;
-  document.getElementById("rq-go").addEventListener("click", () => navigate("node/" + q.node_id));
-  document.getElementById("rq-skip").addEventListener("click", () => { reviewQuizzes.shift(); if (reviewQuizzes.length) showReviewQuiz(); else if (reviewQueue.length) showReviewCard(); else render(); });
+  nav.innerHTML = `<button class="btn-secondary" id="nav-back">← Back</button>`;
+  document.getElementById("nav-back").addEventListener("click", () => renderLesson());
+  if (hasCards) document.getElementById("rv-cards").addEventListener("click", () => reviewLessonCards());
+  if (hasQuiz) document.getElementById("rv-quiz").addEventListener("click", () => reviewLessonQuiz());
 }
 
-function showReviewCard() {
-  if (!reviewQueue.length) { render(); return; }
-  const card = reviewQueue[0];
-  const newTag = card.is_new ? '<span class="status-pill pill-gen" style="margin-left:8px">New</span>' : '';
-  view.innerHTML = `
-    <div class="review-wrap">
-      <div class="review-head">
-        <h1>Review</h1>
-        <p>${reviewQueue.length} card${reviewQueue.length > 1 ? "s" : ""} due · <button class="crumb-link" id="rv-lesson-link">${escapeHtml(card.node_title)}</button>${newTag}</p>
-      </div>
+function reviewLessonQuiz() {
+  // jump to the graded test block and re-take it
+  const c = lessonCtx;
+  const idx = c.blocks.findIndex((b) => b.kind === "check");
+  if (idx >= 0) { c.step = idx; c.maxStep = Math.max(c.maxStep, idx); }
+  renderLesson();
+}
+
+function reviewLessonCards() {
+  const c = lessonCtx;
+  c._cards = (c.node.flashcards || []).slice();
+  c._cardIdx = 0;
+  showLessonCard();
+}
+
+function showLessonCard() {
+  const c = lessonCtx;
+  const stage = document.getElementById("stage");
+  const nav = document.getElementById("nav");
+  if (c._cardIdx >= c._cards.length) {
+    stage.innerHTML = `<div class="step"><div class="step-kicker">Review</div><h2 class="step-title">Cards done</h2><p class="step-sub">You reviewed ${c._cards.length} card${c._cards.length > 1 ? "s" : ""} for this idea.</p></div>`;
+    nav.innerHTML = `<button class="btn-primary" id="nav-fwd">Back to lesson</button>`;
+    document.getElementById("nav-fwd").addEventListener("click", () => renderLesson());
+    return;
+  }
+  const card = c._cards[c._cardIdx];
+  stage.innerHTML = `
+    <div class="step">
+      <div class="step-kicker">Flashcard ${c._cardIdx + 1} of ${c._cards.length}</div>
       <div class="review-card flipcard" id="review-card">
         <div class="flipcard-inner">
           <div class="flipcard-face front">${md(card.front)}</div>
@@ -871,8 +885,7 @@ function showReviewCard() {
         <button class="rate-btn" data-r="easy">Easy</button>
       </div>
     </div>`;
-
-  document.getElementById("rv-lesson-link").addEventListener("click", () => navigate("node/" + card.node_id));
+  nav.innerHTML = "";
 
   const cardEl = document.getElementById("review-card");
   cardEl.addEventListener("click", () => {
@@ -891,8 +904,8 @@ function showReviewCard() {
   document.querySelectorAll(".rate-btn").forEach((b) =>
     b.addEventListener("click", async () => {
       await api(`/api/flashcards/${card.id}`, { method: "POST", body: { rating: b.dataset.r } });
-      reviewQueue.shift();
-      showReviewCard();
+      c._cardIdx++;
+      showLessonCard();
     })
   );
 }
@@ -913,8 +926,7 @@ async function renderProgress() {
       <div class="mastery-bar wide"><span class="mastery-fill" style="width:${pct}%"></span></div>
       <p class="progress-sub">${s.nodes_mastered} of ${s.nodes_ready} ready ideas mastered (${pct}%)</p>
       <div class="progress-actions">
-        <button class="btn-primary" data-nav="review">Review now</button>
-        <button class="btn-secondary" data-nav="home">Ask something new</button>
+        <button class="btn-primary" data-nav="home">Ask something new</button>
       </div>
     </div>`;
   view.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => navigate(b.dataset.nav)));
@@ -989,18 +1001,6 @@ async function renderSettings() {
     const el = document.getElementById("llm-status");
     if (el) el.innerHTML = '<span class="status-pill pill-failed">unreachable</span>';
   });
-}
-
-// ---------------- due badge ----------------
-async function refreshDueBadge() {
-  try {
-    const data = await api("/api/review");
-    const n = (data.cards || []).length + (data.quizzes || []).length;
-    for (const id of ["due-badge", "due-badge-m"]) {
-      const badge = document.getElementById(id);
-      if (badge) { badge.hidden = n === 0; badge.textContent = n; }
-    }
-  } catch (e) { /* ignore */ }
 }
 
 // ---------------- boot ----------------
