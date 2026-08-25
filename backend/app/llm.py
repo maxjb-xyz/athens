@@ -170,7 +170,15 @@ def _parse_json(text: str) -> dict:
             depth -= 1
             if depth == 0:
                 return json.loads(text[start : i + 1])
-    raise ValueError("unbalanced JSON in LLM response")
+    # unbalanced — the model was truncated before closing the JSON object.
+    # Try to salvage by appending the missing closing delimiters.
+    open_b = text[start:].count("{") - text[start:].count("}")
+    open_s = text[start:].count("[") - text[start:].count("]")
+    repaired = text[start:] + "}" * open_b + "]" * open_s
+    try:
+        return json.loads(repaired)
+    except json.JSONDecodeError:
+        raise ValueError("unbalanced JSON in LLM response")
 
 
 class OpenAIProvider:
@@ -187,12 +195,11 @@ class OpenAIProvider:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.3,
-            "max_tokens": 4096,
         }
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        with httpx.Client(timeout=180.0) as client:
+        with httpx.Client(timeout=300.0) as client:
             resp = client.post(
                 f"{self.base_url}/chat/completions", json=payload, headers=headers
             )
