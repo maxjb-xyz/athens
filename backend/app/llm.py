@@ -186,7 +186,8 @@ class OpenAIProvider:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": 0.7,
+            "temperature": 0.3,
+            "max_tokens": 4096,
         }
         headers = {"Content-Type": "application/json"}
         if self.api_key:
