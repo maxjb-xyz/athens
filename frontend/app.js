@@ -792,17 +792,13 @@ async function renderProgress() {
 // ---------------- settings ----------------
 async function renderSettings() {
   const s = await api("/api/settings");
-  const probe = await api("/api/health/llm");
-  const llmStatus = probe.ok
-    ? `<span class="status-pill pill-ready">${probe.provider === "mock" ? "mock (offline demo)" : probe.model} · ${probe.latency_ms}ms</span>`
-    : `<span class="status-pill pill-failed">unreachable</span>`;
   view.innerHTML = `
     <div class="settings-wrap">
       <div class="progress-head"><h1>Settings</h1></div>
       <div class="settings-card">
         <div class="settings-row">
           <span class="settings-label">Model</span>
-          <span>${llmStatus}</span>
+          <span id="llm-status"><span class="status-pill pill-gen">checking…</span></span>
         </div>
         <div class="settings-form">
           <label>Provider
@@ -846,6 +842,21 @@ async function renderSettings() {
     };
     await api("/api/settings", { method: "PUT", body });
     render();
+  });
+
+  // fire the LLM probe asynchronously — it can take several seconds with a
+  // local model and we don't want to block the page render on it
+  api("/api/health/llm").then((probe) => {
+    const el = document.getElementById("llm-status");
+    if (!el) return;
+    const label = probe.ok
+      ? (probe.provider === "mock" ? "mock (offline demo)" : probe.model) + " · " + probe.latency_ms + "ms"
+      : "unreachable";
+    const cls = probe.ok ? "pill-ready" : "pill-failed";
+    el.innerHTML = `<span class="status-pill ${cls}">${label}</span>`;
+  }).catch(() => {
+    const el = document.getElementById("llm-status");
+    if (el) el.innerHTML = '<span class="status-pill pill-failed">unreachable</span>';
   });
 }
 
