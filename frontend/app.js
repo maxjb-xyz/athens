@@ -76,7 +76,7 @@ function md(src) {
 
   for (const line of lines) {
     const t = line.trim();
-    if (!t) { flushPara(); closeList(); continue; }
+    if (!t) { flushPara(); continue; }
     let m = t.match(/^[-*•]\s+(.*)$/);
     if (m) {
       flushPara();
@@ -286,21 +286,31 @@ async function renderLesson() {
   const blocks = c.blocks;
   const total = blocks.length;
   const block = blocks[c.step];
-  const pct = Math.round((c.step / (total - 1)) * 100);
+
+  // segmented stepper: one dash per block, with a taller divider between sections
+  const segKey = (b) => b.section || "kind:" + (b.kind || b.type);
+  const segs = blocks.map((b, i) => {
+    const boundary = i > 0 && segKey(blocks[i - 1]) !== segKey(b);
+    const cls = i < c.step ? "seg done" : i === c.step ? "seg cur" : "seg";
+    return { boundary, cls };
+  });
+  const segHtml = segs
+    .map((s) => `${s.boundary ? '<span class="stepper-divider"></span>' : ""}<span class="${s.cls}"></span>`)
+    .join("");
 
   view.innerHTML = `
     <div class="lesson">
       <div class="lesson-crumb">
-        <button class="crumb-link" data-nav="map">Map</button><span>/</span><span>${escapeHtml(c.node.title)}</span>
+        <button class="crumb-link" data-nav="map">← Map</button>
         <span class="crumb-spacer"></span>
         <button class="crumb-link" id="act-review">Review</button>
         <button class="crumb-link" id="act-edit">Edit</button>
         <button class="crumb-link" id="act-regen">Regenerate</button>
         <button class="crumb-link danger" id="act-del">Delete</button>
       </div>
-      <div class="stepper" id="stepper">
+      <div class="stepper">
         <span class="stepper-sec">${escapeHtml(block.section || blockLabel(block))}</span>
-        <span class="stepper-track"><span class="stepper-fill" style="width:${pct}%"></span></span>
+        <div class="stepper-segs">${segHtml}</div>
         <span class="stepper-count">${c.step + 1} / ${total}</span>
       </div>
       <div class="lesson-stage" id="stage"></div>
@@ -392,8 +402,8 @@ async function renderBlock() {
       break;
     case "pitfall":
       stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Pitfall")}</div><h2 class="step-title">${escapeHtml(heading || "Watch out")}</h2>
-        <div class="callout"><strong>The trap:</strong> ${md(block.trap)}</div>
-        <div class="callout" style="background:var(--terracotta-soft);border-left-color:var(--terracotta);"><strong>The truth:</strong> ${md(block.truth)}</div></div>`;
+        <div class="callout trap"><strong>The trap:</strong> ${md(block.trap)}</div>
+        <div class="callout truth"><strong>The truth:</strong> ${md(block.truth)}</div></div>`;
       break;
     case "diagram":
       stage.innerHTML = `<div class="step"><div class="step-kicker">${escapeHtml(block.section || "Diagram")}</div><h2 class="step-title">${escapeHtml(heading || "At a glance")}</h2><div class="diagram-box" id="diagram-box"></div></div>`;

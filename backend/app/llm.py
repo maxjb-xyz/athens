@@ -47,6 +47,9 @@ def mock_lesson(topic: str) -> dict:
     """Produce a coherent, topic-aware stand-in lesson for demo / testing."""
     t = _clean_question(topic) or "this idea"
     title = _title_case(t)
+    # vary the number of quiz questions deterministically by topic length so
+    # the demo shows quizzes are variable and can appear anywhere in the flow
+    n_quiz = 2 + (len(t) % 4)  # 2-5 inline quiz items, spread across 2 modules
 
     definition = (
         f"{title} is easier to hold onto once you can say it in one plain sentence: what it is, "
@@ -73,7 +76,8 @@ def mock_lesson(topic: str) -> dict:
         "    C --> E[Why it matters]\n"
         "    E --> F[What to learn next]"
     )
-    quiz = [
+    # a pool of generic-but-topic-aware quiz questions; count varies by topic
+    quiz_pool = [
         {
             "question": f"What is the most reliable way to genuinely understand {t}?",
             "options": [
@@ -116,7 +120,36 @@ def mock_lesson(topic: str) -> dict:
                 "Rechecking the shaky prerequisite fixes the cause instead of the symptom."
             ),
         },
+        {
+            "question": f"Which habit most reliably turns reading about {t} into understanding {t}?",
+            "options": [
+                "Working a concrete example forwards and backwards",
+                "Rereading the definition until it feels familiar",
+                "Highlighting every technical term",
+                "Skipping straight to advanced edge cases",
+            ],
+            "answer": 0,
+            "explanation": (
+                "Re-deriving the idea from a concrete example is what converts recognition "
+                "into the ability to rebuild it."
+            ),
+        },
+        {
+            "question": f"How do you know you have truly mastered {t}?",
+            "options": [
+                "You can rebuild the idea from scratch on a blank page",
+                "You recognise the words when you read them",
+                "You have read the definition several times",
+                "You can quote the summary from memory",
+            ],
+            "answer": 0,
+            "explanation": (
+                "Recognition is not the same as reconstruction. If you can rebuild it from "
+                "nothing, you understand it."
+            ),
+        },
     ]
+    quiz = quiz_pool[:n_quiz]
     flashcards = [
         {
             "front": f"In one sentence, what is {title}?",
@@ -146,17 +179,12 @@ def mock_lesson(topic: str) -> dict:
                 "title": "An example",
                 "modules": [
                     {"type": "example", "heading": "Watch it work", "body": worked_example},
-                    {"type": "quiz", "items": [{
-                        "question": f"Which habit most reliably turns reading about {t} into understanding {t}?",
-                        "options": [
-                            "Working a concrete example forwards and backwards",
-                            "Rereading the definition until it feels familiar",
-                            "Highlighting every technical term",
-                            "Skipping straight to advanced edge cases",
-                        ],
-                        "answer": 0,
-                        "explanation": "Re-deriving the idea from a concrete example is what converts recognition into the ability to rebuild it.",
-                    }]},
+                ],
+            },
+            {
+                "title": "Quick check",
+                "modules": [
+                    {"type": "quiz", "items": quiz[: max(1, n_quiz - 2)]},
                 ],
             },
             {
