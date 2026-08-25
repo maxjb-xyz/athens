@@ -252,6 +252,10 @@ html, body {
 }
 .diagram-box svg { max-width: 100%; height: auto; }
 .diagram-box svg .nodeLabel { font-family: var(--body) !important; }
+/* mermaid wraps node labels in a <p> with default margins — strip them so
+   text sits flush and doesn't clip the box */
+.diagram-box svg .nodeLabel p { margin: 0; line-height: 1.4; }
+.diagram-box svg foreignObject div { padding: 4px 6px; }
 
 /* quiz */
 .quiz-block { margin-top: 8px; }

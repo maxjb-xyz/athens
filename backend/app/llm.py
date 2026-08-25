@@ -154,8 +154,14 @@ def _parse_json(text: str) -> dict:
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()
+
+    def loads(s):
+        # strict=False tolerates control characters the model leaves inside
+        # strings (raw newlines in markdown, etc.)
+        return json.loads(s, strict=False)
+
     try:
-        return json.loads(text)
+        return loads(text)
     except json.JSONDecodeError:
         pass
     # fall back to first balanced {...} block
@@ -169,14 +175,14 @@ def _parse_json(text: str) -> dict:
         elif text[i] == "}":
             depth -= 1
             if depth == 0:
-                return json.loads(text[start : i + 1])
+                return loads(text[start : i + 1])
     # unbalanced — the model was truncated before closing the JSON object.
     # Try to salvage by appending the missing closing delimiters.
     open_b = text[start:].count("{") - text[start:].count("}")
     open_s = text[start:].count("[") - text[start:].count("]")
     repaired = text[start:] + "}" * open_b + "]" * open_s
     try:
-        return json.loads(repaired)
+        return loads(repaired)
     except json.JSONDecodeError:
         raise ValueError("unbalanced JSON in LLM response")
 
@@ -195,6 +201,9 @@ class OpenAIProvider:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.3,
+            # for reasoning models (qwen3.5, etc.) this skips the internal
+            # thinking pass, which otherwise burns minutes and tokens
+            "think": False,
         }
         headers = {"Content-Type": "application/json"}
         if self.api_key:

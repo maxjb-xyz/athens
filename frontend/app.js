@@ -217,14 +217,36 @@ async function renderNode(id) {
     return;
   }
 
+  const done = node.mastery && node.mastery.attempts > 0;
+  const saved = loadProgress(id);
   lessonCtx = {
     node,
-    step: 0,
-    maxStep: 0,
+    step: done ? STEPS.length - 1 : (saved ? saved : 0),
+    maxStep: done ? STEPS.length - 1 : (saved ? STEPS.length - 1 : 0),
     quiz: { index: 0, answers: [], correct: 0, results: null },
     summary: null,
   };
   renderLesson();
+}
+
+// persist per-node lesson progress so a completed or partially-read lesson
+// reopens where the learner left off instead of resetting to the intro
+const PROGRESS_KEY = "athens.progress.v1";
+
+function loadProgress(nodeId) {
+  try {
+    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}");
+    const step = data[nodeId];
+    return Number.isInteger(step) && step > 0 ? step : 0;
+  } catch { return 0; }
+}
+
+function saveProgress(nodeId, step) {
+  try {
+    const data = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}");
+    data[nodeId] = step;
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
 }
 
 async function pollNode(id) {
@@ -372,6 +394,7 @@ function advance(nextStep) {
   const c = lessonCtx;
   c.step = nextStep;
   c.maxStep = Math.max(c.maxStep, nextStep);
+  saveProgress(c.node.id, nextStep);
   renderLesson();
 }
 
@@ -382,10 +405,36 @@ async function renderDiagram(code) {
     mermaid.initialize({ startOnLoad: false, theme: "base", themeVariables: {
       primaryColor: "#f6f0e6", primaryTextColor: "#2f2a24", primaryBorderColor: "#b8552b",
       lineColor: "#6b5f4f", secondaryColor: "#f3dccb", tertiaryColor: "#fffdf8",
-      fontFamily: "Georgia, 'Times New Roman', serif", fontSize: "17px",
-    }, flowchart: { padding: 14, nodeSpacing: 60, rankSpacing: 60, useMaxWidth: true, htmlLabels: true } });
+      // must match the CSS-rendered font, or mermaid under-measures and clips
+      fontFamily: "Source Serif 4, Georgia, 'Times New Roman', serif", fontSize: "15px",
+    }, flowchart: { padding: 16, nodeSpacing: 80, rankSpacing: 80, useMaxWidth: true } });
     const { svg } = await mermaid.render("diagram-" + Math.random().toString(36).slice(2), code);
     box.innerHTML = svg;
+    // mermaid measures label width with SVG text metrics but renders via
+    // HTML foreignObject, which is ~10% wider for serif fonts — widen each
+    // node box + label container to fit the real rendered text.
+    requestAnimationFrame(() => {
+      const svgEl = box.querySelector("svg");
+      if (!svgEl) return;
+      svgEl.querySelectorAll(".node").forEach((node) => {
+        const fo = node.querySelector("foreignObject");
+        const label = node.querySelector(".nodeLabel");
+        const rect = node.querySelector("rect.label-container, rect");
+        if (!fo || !label) return;
+        const text = label.textContent || "";
+        const w = text.length * 8.6 + 24; // rough glyph-width for 15px serif + padding
+        if (w > +fo.getAttribute("width")) {
+          fo.setAttribute("width", w);
+          const dx = (w - +fo.getAttribute("width")) / 2 || 0;
+          const tx = +fo.getAttribute("x") - dx;
+          fo.setAttribute("x", tx);
+          if (rect) {
+            rect.setAttribute("width", w);
+            rect.setAttribute("x", -w / 2);
+          }
+        }
+      });
+    });
   } catch (e) {
     box.innerHTML = `<pre class="diagram-raw">${escapeHtml(code)}</pre>
       <span class="flip-hint">Couldn't render this diagram — showing the source.</span>`;
@@ -458,6 +507,7 @@ function renderQuizQuestion(stage, q, items) {
     const res = await api(`/api/nodes/${lessonCtx.node.id}/quiz`, { method: "POST", body: { answers: q.answers } });
     lessonCtx.summary = res;
     lessonCtx.step = 6; lessonCtx.maxStep = 6;
+    saveProgress(lessonCtx.node.id, 6);
     renderLesson();
   });
 }
@@ -729,7 +779,7 @@ function showReviewCard() {
         <h1>Review</h1>
         <p>${reviewQueue.length} card${reviewQueue.length > 1 ? "s" : ""} due · <button class="crumb-link" id="rv-lesson-link">${escapeHtml(card.node_title)}</button>${newTag}</p>
       </div>
-      <div class="review-card" id="review-card">
+      <div class="review-card flipcard" id="review-card">
         <div class="flipcard-inner">
           <div class="flipcard-face front">${md(card.front)}</div>
           <div class="flipcard-face back">${md(card.back)}</div>
