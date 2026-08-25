@@ -176,22 +176,31 @@ html, body {
 
 /* ---------- lesson stepper ---------- */
 .stepper {
-  display: flex; align-items: center; gap: 14px;
+  display: flex; align-items: flex-start; gap: 14px;
   margin: 18px 0 26px;
 }
-.stepper-sec {
-  font-size: 13px; font-weight: 600; color: var(--ink-soft);
-  text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap;
+.stepper-sections { flex: 1; display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.stepper-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.stepper-group-label {
+  font-size: 11.5px; font-weight: 600; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
 }
-.stepper-segs { flex: 1; display: flex; align-items: center; gap: 4px; }
-.stepper-segs .seg {
-  flex: 1; height: 7px; border-radius: 2px; background: var(--paper-deep);
-  min-width: 6px;
+.stepper-group-segs { display: flex; align-items: center; gap: 4px; }
+.stepper-group-segs .seg {
+  appearance: none; cursor: pointer; border: 1px solid transparent;
+  width: 22px; height: 22px; border-radius: 5px; padding: 0;
+  display: grid; place-items: center;
+  font-size: 12px; line-height: 1; font-family: var(--body);
+  background: var(--paper-deep); color: var(--ink-faint);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.stepper-segs .seg.done { background: var(--terracotta); }
-.stepper-segs .seg.cur { background: var(--terracotta); box-shadow: 0 0 0 3px rgba(184, 85, 43, 0.22); }
-.stepper-segs .stepper-divider { width: 2px; height: 14px; background: var(--border); border-radius: 1px; flex: none; margin: 0 5px; }
-.stepper-count { font-size: 13px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; }
+.stepper-group-segs .seg:hover { border-color: var(--terracotta); color: var(--ink); }
+.stepper-group-segs .seg.done { background: var(--terracotta-soft); color: var(--terracotta-dark); }
+.stepper-group-segs .seg.cur { background: var(--terracotta); color: #fff; box-shadow: 0 0 0 3px rgba(184, 85, 43, 0.22); }
+.stepper-group-segs .seg.locked { cursor: default; opacity: 0.4; }
+.stepper-divider { width: 1px; background: var(--border); align-self: stretch; flex: none; }
+.stepper-count { font-size: 13px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; padding-top: 20px; }
 
 /* key terms module */
 .keyterms { display: flex; flex-direction: column; gap: 10px; }
@@ -527,8 +536,11 @@ html, body {
   /* lesson */
   .lesson { padding: 22px 18px; border-radius: 12px; }
   .lesson-crumb { flex-wrap: wrap; row-gap: 4px; margin-bottom: 16px; }
-  .stepper { gap: 6px; margin: 14px 0 20px; }
-  .step-pill { padding: 6px 11px; font-size: 12.5px; }
+  .stepper { gap: 8px; margin: 14px 0 20px; }
+  .stepper-sections { overflow-x: auto; padding-bottom: 4px; }
+  .stepper-group { flex: none; }
+  .stepper-group-label { max-width: 90px; }
+  .stepper-count { display: none; }
   .step { max-width: 100%; }
   .step-title { font-size: 24px; }
   .lesson-nav { margin-top: 24px; }

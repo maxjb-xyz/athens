@@ -211,12 +211,53 @@ function buildBlocks(node) {
   return blocks;
 }
 
+function blockGlyph(block) {
+  if (block.kind === "intro") return "●";
+  if (block.kind === "check") return "✓";
+  if (block.kind === "done") return "★";
+  const g = { text: "¶", example: "◆", pitfall: "⚠", diagram: "◇", key_terms: "K", summary: "≡", quiz: "?" };
+  return g[block.type] || "•";
+}
+
 function blockLabel(block) {
   if (block.kind === "intro") return "Intro";
-  if (block.kind === "check") return "Check";
+  if (block.kind === "check") return "Test";
   if (block.kind === "done") return "Done";
-  const labels = { text: "Explain", example: "Example", pitfall: "Pitfall", diagram: "Diagram", key_terms: "Key terms", summary: "Summary" };
+  const labels = { text: "Explain", example: "Example", pitfall: "Pitfall", diagram: "Diagram", key_terms: "Key terms", summary: "Summary", quiz: "Quick check" };
   return labels[block.type] || "Learn";
+}
+
+function stepperHtml(blocks, step, maxStep) {
+  // group blocks into sections (consecutive blocks sharing a section key)
+  const groups = [];
+  let cur = null;
+  const key = (b) => (b.section || "kind:" + (b.kind || b.type));
+  const secLabel = (b) => b.section || blockLabel(b);
+  blocks.forEach((b, i) => {
+    const k = key(b);
+    if (!cur || cur.key !== k) {
+      cur = { key: k, label: secLabel(b), segs: [] };
+      groups.push(cur);
+    }
+    cur.segs.push({ block: b, i });
+  });
+
+  const groupHtml = groups
+    .map((g) => {
+      const segs = g.segs
+        .map((s) => {
+          const done = s.i < step;
+          const curCls = s.i === step ? "seg cur" : done ? "seg done" : "seg";
+          const locked = s.i > maxStep ? " locked" : "";
+          const label = blockLabel(s.block);
+          return `<button class="${curCls}${locked}" data-step="${s.i}" title="${escapeHtml(label)}" ${locked ? "disabled" : ""}>${blockGlyph(s.block)}</button>`;
+        })
+        .join("");
+      return `<div class="stepper-group"><span class="stepper-group-label">${escapeHtml(g.label)}</span><div class="stepper-group-segs">${segs}</div></div>`;
+    })
+    .join('<span class="stepper-divider"></span>');
+
+  return `<div class="stepper-sections">${groupHtml}</div>`;
 }
 
 async function renderNode(id) {
@@ -285,18 +326,6 @@ async function renderLesson() {
   const c = lessonCtx;
   const blocks = c.blocks;
   const total = blocks.length;
-  const block = blocks[c.step];
-
-  // segmented stepper: one dash per block, with a taller divider between sections
-  const segKey = (b) => b.section || "kind:" + (b.kind || b.type);
-  const segs = blocks.map((b, i) => {
-    const boundary = i > 0 && segKey(blocks[i - 1]) !== segKey(b);
-    const cls = i < c.step ? "seg done" : i === c.step ? "seg cur" : "seg";
-    return { boundary, cls };
-  });
-  const segHtml = segs
-    .map((s) => `${s.boundary ? '<span class="stepper-divider"></span>' : ""}<span class="${s.cls}"></span>`)
-    .join("");
 
   view.innerHTML = `
     <div class="lesson">
@@ -309,14 +338,21 @@ async function renderLesson() {
         <button class="crumb-link danger" id="act-del">Delete</button>
       </div>
       <div class="stepper">
-        <span class="stepper-sec">${escapeHtml(block.section || blockLabel(block))}</span>
-        <div class="stepper-segs">${segHtml}</div>
+        ${stepperHtml(blocks, c.step, c.maxStep)}
         <span class="stepper-count">${c.step + 1} / ${total}</span>
       </div>
       <div class="lesson-stage" id="stage"></div>
       <div class="lesson-nav" id="nav"></div>
     </div>
   `;
+
+  view.querySelectorAll(".stepper-group-segs .seg:not(.locked)").forEach((b) => {
+    b.addEventListener("click", () => {
+      lessonCtx.step = parseInt(b.dataset.step, 10);
+      saveProgress(lessonCtx.node.id, lessonCtx.step);
+      renderLesson();
+    });
+  });
 
   document.querySelectorAll("[data-nav='map']").forEach((b) => b.addEventListener("click", () => navigate("map")));
   document.getElementById("act-regen").addEventListener("click", async () => {
